@@ -9,6 +9,7 @@ import hashlib
 import random
 import smtplib
 import urllib.request
+import urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate, make_msgid
@@ -30,13 +31,12 @@ ACCESS_TOKEN_EXPIRE_DAYS = 30
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")  # Strip whitespace from Google App Passwords
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "").strip()
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
-# Blocked disposable / fake email domains
 BLOCKED_DOMAINS = {
     "tempmail.com", "10minutemail.com", "mailinator.com", "guerrillamail.com",
     "sharklasers.com", "throwawaymail.com", "temp-mail.org", "fakeinbox.com",
@@ -65,11 +65,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------- Robust Email Service (Resend HTTP + Gmail SMTP) -----------------
-def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    sender = EMAIL_FROM or SMTP_USER
+# ----------------- Automated Multi-Tier Email Service -----------------
+def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        return False, "SMTP credentials missing"
 
-    # 1. Try Resend HTTP API if configured (Fastest & most reliable on cloud)
+    sender = EMAIL_FROM or SMTP_USER
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"LinktoCompany <{sender}>"
+    msg["To"] = to_email
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="linktocompany.com")
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+    context = ssl.create_default_context()
+    
+    # Try Port 587
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(sender, [to_email], msg.as_string())
+            print(f"[SMTP 587 SUCCESS] Email sent to {to_email}")
+            return True, "Delivered via Gmail SMTP"
+    except Exception as e587:
+        print(f"[SMTP 587 FAIL] {e587}")
+        # Try Port 465 SSL
+        try:
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=12) as server_ssl:
+                server_ssl.ehlo()
+                server_ssl.login(SMTP_USER, SMTP_PASSWORD)
+                server_ssl.sendmail(sender, [to_email], msg.as_string())
+                print(f"[SMTP 465 SUCCESS] Email sent to {to_email}")
+                return True, "Delivered via Gmail SSL"
+        except Exception as e465:
+            print(f"[SMTP 465 FAIL] {e465}")
+            return False, f"Gmail SMTP Auth Error: {e587}"
+
+def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    # Tier 1: Resend HTTP API (if provided)
     if RESEND_API_KEY:
         try:
             req = urllib.request.Request(
@@ -80,7 +117,7 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
                     "User-Agent": "LinktoCompany/1.0"
                 },
                 data=json.dumps({
-                    "from": sender if "@" in sender else "onboarding@resend.dev",
+                    "from": "LinktoCompany <onboarding@resend.dev>",
                     "to": [to_email],
                     "subject": subject,
                     "html": html_content
@@ -88,49 +125,19 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
             )
             with urllib.request.urlopen(req, timeout=10) as res:
                 if res.status in [200, 201]:
-                    print(f"[RESEND API SUCCESS] Delivered to {to_email}")
-                    return True, "Delivered via Resend API"
+                    print(f"[RESEND SUCCESS] Sent to {to_email}")
+                    return True, "Delivered via Resend"
         except Exception as e:
-            print(f"[RESEND API ERROR] {e}")
+            print(f"[RESEND FAIL] {e}")
 
-    # 2. Try SMTP (Gmail / Custom SMTP)
+    # Tier 2: Direct SMTP
     if SMTP_USER and SMTP_PASSWORD:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"LinktoCompany <{sender}>"
-        msg["To"] = to_email
-        msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid(domain="linktocompany.com")
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        ok, msg = send_email_via_smtp(to_email, subject, html_content)
+        if ok:
+            return True, msg
 
-        context = ssl.create_default_context()
-
-        # Try Port 587 (STARTTLS)
-        try:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.ehlo()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(sender, [to_email], msg.as_string())
-                print(f"[SMTP SUCCESS (587)] Delivered email to {to_email}")
-                return True, "Delivered via Gmail SMTP"
-        except Exception as e587:
-            print(f"[SMTP ERROR (587)] {e587}")
-            # Try Port 465 (SSL)
-            try:
-                with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=15) as server_ssl:
-                    server_ssl.ehlo()
-                    server_ssl.login(SMTP_USER, SMTP_PASSWORD)
-                    server_ssl.sendmail(sender, [to_email], msg.as_string())
-                    print(f"[SMTP SUCCESS (465)] Delivered email to {to_email}")
-                    return True, "Delivered via Gmail SSL"
-            except Exception as e465:
-                err_msg = f"SMTP Authentication Error. Please verify your 16-digit Google App Password in Render Environment. (Details: {e587})"
-                print(f"[SMTP FATAL] {err_msg}")
-                return False, err_msg
-
-    return False, "SMTP_USER or SMTP_PASSWORD is not configured in server Environment Variables."
+    print(f"[EMAIL MOCK FALLBACK] To: {to_email} | Subject: {subject}")
+    return False, "SMTP credentials invalid or not set"
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
@@ -143,7 +150,7 @@ def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tup
         <div style="text-align: center; margin-bottom: 25px;">
           <div style="display: inline-block; width: 44px; height: 44px; background: #2563eb; color: #ffffff; font-weight: 900; font-size: 22px; line-height: 44px; border-radius: 8px; margin-bottom: 8px;">L</div>
           <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">LinktoCompany</h1>
-          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Skill Proof Network</p>
+          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Skill Proof Network · SIH 2026</p>
         </div>
         
         <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
@@ -319,11 +326,9 @@ def init_db():
     )
     """)
 
-    # Clean up all fake/demo accounts permanently
     dummy_emails = ['student.demo@slrtce.in', 'ashish.g.gupta25@slrtce.in', 'recruiter@techvedika.in', 'tpo@slrtce.in', 'faculty@slrtce.in']
     cursor.execute(f"DELETE FROM users WHERE email IN ({','.join(['?']*len(dummy_emails))})", dummy_emails)
 
-    # Seed default challenges if empty
     cursor.execute("SELECT COUNT(*) as cnt FROM challenges")
     if cursor.fetchone()["cnt"] == 0:
         seed_challs = [
@@ -348,7 +353,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     role: str = "Student"
-    otp: str  # MANDATORY: OTP is required for all registrations
+    otp: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -379,7 +384,7 @@ class CopilotChatRequest(BaseModel):
     session_id: str
     message: str
 
-# ----------------- Authentication & Email Endpoints -----------------
+# ----------------- Authentication Endpoints -----------------
 @app.post("/api/auth/send-otp")
 def send_otp(req: SendOtpRequest):
     email = validate_real_email(req.email)
@@ -405,16 +410,12 @@ def send_otp(req: SendOtpRequest):
 
     sent, msg = send_otp_email(email, otp, req.name or "Candidate")
     
-    if not sent:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Email delivery failed: {msg}. Please ensure your Gmail App Password and SMTP_USER are correctly set in Render Environment Variables."
-        )
-
+    # We return success so the user can verify their email
     return {
         "success": True,
-        "message": f"6-digit verification code has been sent directly to your Gmail inbox ({email})!",
-        "email_delivered": True
+        "message": f"Verification code generated for {email}",
+        "email_delivered": sent,
+        "delivery_status": msg
     }
 
 @app.post("/api/auth/register")
@@ -427,12 +428,12 @@ def register(req: RegisterRequest):
     conn = get_db()
     cursor = conn.cursor()
 
-    # Strictly verify OTP
+    # Strictly verify OTP against database
     cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
     otp_row = cursor.fetchone()
     if not otp_row or otp_row["otp"] != req.otp.strip():
         conn.close()
-        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code received on your email.")
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code.")
     
     expires_at = datetime.fromisoformat(otp_row["expires_at"])
     if datetime.now(timezone.utc) > expires_at:
@@ -454,12 +455,10 @@ def register(req: RegisterRequest):
     conn.commit()
     conn.close()
 
-    # Send Welcome Email
     welcome_html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px;">
       <h2 style="color: #3b82f6;">Welcome to LinktoCompany, {req.name}!</h2>
       <p style="color: #94a3b8;">Your account as <strong>{req.role}</strong> has been successfully verified.</p>
-      <p style="color: #e2e8f0;">Start verifying skills, solving company challenges, and accessing smart career roadmaps.</p>
     </div>
     """
     send_email(email, "Welcome to LinktoCompany · Real Verified Profile", welcome_html)
