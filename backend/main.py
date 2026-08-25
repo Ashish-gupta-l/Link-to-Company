@@ -1,5 +1,6 @@
 import os
 import re
+import ssl
 import time
 import uuid
 import json
@@ -10,6 +11,7 @@ import smtplib
 import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -29,7 +31,7 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")  # Strip whitespace from Google App Passwords
-EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "noreply@linktocompany.com").strip()
+EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "").strip()
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
@@ -65,6 +67,8 @@ app.add_middleware(
 
 # ----------------- Robust Email Service (Resend HTTP + Gmail SMTP) -----------------
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    sender = EMAIL_FROM or SMTP_USER
+
     # 1. Try Resend HTTP API if configured (Fastest & most reliable on cloud)
     if RESEND_API_KEY:
         try:
@@ -76,7 +80,7 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
                     "User-Agent": "LinktoCompany/1.0"
                 },
                 data=json.dumps({
-                    "from": EMAIL_FROM if "@" in EMAIL_FROM else "onboarding@resend.dev",
+                    "from": sender if "@" in sender else "onboarding@resend.dev",
                     "to": [to_email],
                     "subject": subject,
                     "html": html_content
@@ -85,7 +89,7 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
             with urllib.request.urlopen(req, timeout=10) as res:
                 if res.status in [200, 201]:
                     print(f"[RESEND API SUCCESS] Delivered to {to_email}")
-                    return True, "Delivered via Resend"
+                    return True, "Delivered via Resend API"
         except Exception as e:
             print(f"[RESEND API ERROR] {e}")
 
@@ -93,57 +97,73 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
     if SMTP_USER and SMTP_PASSWORD:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"LinktoCompany <{EMAIL_FROM}>"
+        msg["From"] = f"LinktoCompany <{sender}>"
         msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html"))
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="linktocompany.com")
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+        context = ssl.create_default_context()
 
         # Try Port 587 (STARTTLS)
         try:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, [to_email], msg.as_string())
-            server.quit()
-            print(f"[SMTP SUCCESS (587)] Delivered to {to_email}")
-            return True, "Delivered via SMTP (587)"
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(sender, [to_email], msg.as_string())
+                print(f"[SMTP SUCCESS (587)] Delivered email to {to_email}")
+                return True, "Delivered via Gmail SMTP"
         except Exception as e587:
             print(f"[SMTP ERROR (587)] {e587}")
             # Try Port 465 (SSL)
             try:
-                server_ssl = smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=10)
-                server_ssl.login(SMTP_USER, SMTP_PASSWORD)
-                server_ssl.sendmail(EMAIL_FROM, [to_email], msg.as_string())
-                server_ssl.quit()
-                print(f"[SMTP SUCCESS (465)] Delivered to {to_email}")
-                return True, "Delivered via SMTP (465)"
+                with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=15) as server_ssl:
+                    server_ssl.ehlo()
+                    server_ssl.login(SMTP_USER, SMTP_PASSWORD)
+                    server_ssl.sendmail(sender, [to_email], msg.as_string())
+                    print(f"[SMTP SUCCESS (465)] Delivered email to {to_email}")
+                    return True, "Delivered via Gmail SSL"
             except Exception as e465:
-                err_msg = f"SMTP Auth Failed (587: {e587}, 465: {e465})"
+                err_msg = f"SMTP Authentication Error. Please verify your 16-digit Google App Password in Render Environment. (Details: {e587})"
                 print(f"[SMTP FATAL] {err_msg}")
                 return False, err_msg
 
-    print(f"[EMAIL SERVICE NOT CONFIGURED] No SMTP or Resend credentials. Mocking delivery to {to_email}")
-    return False, "SMTP credentials not configured on server"
+    return False, "SMTP_USER or SMTP_PASSWORD is not configured in server Environment Variables."
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
     html = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #3b82f6; margin: 0; font-size: 24px;">LinktoCompany</h1>
-        <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Skill Proof Network · SIH 2026</p>
-      </div>
-      <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: center;">
-        <p style="color: #e2e8f0; font-size: 15px; margin-bottom: 15px;">Hello {user_name},</p>
-        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Use the following 6-digit One-Time Password (OTP) to verify your real email address on LinktoCompany:</p>
-        <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #34d399; padding: 15px 0; background: rgba(52, 211, 153, 0.1); border-radius: 6px; display: inline-block; width: 80%;">
-          {otp}
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin: 0; padding: 0; background-color: #050508; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+      <div style="max-width: 560px; margin: 30px auto; background: #0b0d13; color: #ffffff; padding: 35px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+        <div style="text-align: center; margin-bottom: 25px;">
+          <div style="display: inline-block; width: 44px; height: 44px; background: #2563eb; color: #ffffff; font-weight: 900; font-size: 22px; line-height: 44px; border-radius: 8px; margin-bottom: 8px;">L</div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">LinktoCompany</h1>
+          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Skill Proof Network</p>
         </div>
-        <p style="color: #64748b; font-size: 12px; margin-top: 20px;">This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
+        
+        <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+          <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px 0;">Hello <strong>{user_name}</strong>,</p>
+          <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">Your 6-digit verification code to access LinktoCompany is:</p>
+          
+          <div style="font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #34d399; padding: 18px 0; background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; display: block; font-family: monospace;">
+            {otp}
+          </div>
+          
+          <p style="color: #64748b; font-size: 12px; margin: 20px 0 0 0;">This code is valid for <strong>10 minutes</strong>. Do not share this code with anyone.</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 25px; color: #475569; font-size: 11px; font-family: monospace;">
+          © 2026 LinktoCompany · Built for Smart India Hackathon<br>
+          Proof over claims · Skills over keywords
+        </div>
       </div>
-      <div style="text-align: center; margin-top: 25px; color: #64748b; font-size: 11px;">
-        © 2026 LinktoCompany · Built for Smart India Hackathon
-      </div>
-    </div>
+    </body>
+    </html>
     """
     return send_email(to_email, subject, html)
 
@@ -384,12 +404,17 @@ def send_otp(req: SendOtpRequest):
     conn.close()
 
     sent, msg = send_otp_email(email, otp, req.name or "Candidate")
+    
+    if not sent:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Email delivery failed: {msg}. Please ensure your Gmail App Password and SMTP_USER are correctly set in Render Environment Variables."
+        )
+
     return {
         "success": True,
-        "message": f"Verification code sent to {email}" if sent else "Verification code generated",
-        "email_delivered": sent,
-        "delivery_status": msg,
-        "dev_otp": otp  # Included so user is never blocked even if SMTP is misconfigured
+        "message": f"6-digit verification code has been sent directly to your Gmail inbox ({email})!",
+        "email_delivered": True
     }
 
 @app.post("/api/auth/register")
@@ -407,12 +432,12 @@ def register(req: RegisterRequest):
     otp_row = cursor.fetchone()
     if not otp_row or otp_row["otp"] != req.otp.strip():
         conn.close()
-        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code.")
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code received on your email.")
     
     expires_at = datetime.fromisoformat(otp_row["expires_at"])
     if datetime.now(timezone.utc) > expires_at:
         conn.close()
-        raise HTTPException(status_code=400, detail="OTP has expired. Please click 'Resend OTP' to get a new code.")
+        raise HTTPException(status_code=400, detail="OTP has expired. Please click 'Resend OTP' to receive a fresh code.")
 
     cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
     if cursor.fetchone():
