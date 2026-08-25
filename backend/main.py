@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import uuid
 import json
@@ -31,6 +32,25 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "noreply@linktocompany.co
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
+# Blocked disposable / fake email domains
+BLOCKED_DOMAINS = {
+    "tempmail.com", "10minutemail.com", "mailinator.com", "guerrillamail.com",
+    "sharklasers.com", "throwawaymail.com", "temp-mail.org", "fakeinbox.com",
+    "yopmail.com", "dispostable.com", "trashmail.com", "crazymailing.com"
+}
+
+def validate_real_email(email: str) -> str:
+    email = email.strip().lower()
+    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    if not re.match(email_regex, email):
+        raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address.")
+    
+    domain = email.split("@")[-1]
+    if domain in BLOCKED_DOMAINS or "temp" in domain or "fake" in domain or "disposable" in domain:
+        raise HTTPException(status_code=400, detail="Temporary or disposable email domains are not allowed. Use your real email.")
+    
+    return email
+
 app = FastAPI(title="LinktoCompany API", version="1.0.0")
 
 app.add_middleware(
@@ -44,8 +64,8 @@ app.add_middleware(
 # ----------------- Email Service -----------------
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
     if not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[EMAIL SERVICE (MOCK)] To: {to_email} | Subject: {subject}")
-        print(f"[EMAIL SERVICE (MOCK)] Content: {html_content[:150]}...")
+        print(f"[EMAIL SERVICE] To: {to_email} | Subject: {subject}")
+        print(f"[EMAIL SERVICE] Code in content: {html_content}")
         return False
     try:
         msg = MIMEMultipart("alternative")
@@ -75,7 +95,7 @@ def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate"):
       </div>
       <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: center;">
         <p style="color: #e2e8f0; font-size: 15px; margin-bottom: 15px;">Hello {user_name},</p>
-        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Use the following One-Time Password (OTP) to verify your real email address and access your LinktoCompany account:</p>
+        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Use the following 6-digit One-Time Password (OTP) to verify your real email address on LinktoCompany:</p>
         <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #34d399; padding: 15px 0; background: rgba(52, 211, 153, 0.1); border-radius: 6px; display: inline-block; width: 80%;">
           {otp}
         </div>
@@ -240,17 +260,9 @@ def init_db():
     )
     """)
 
-    # Seed demo users if empty
-    seed_users = [
-        ("ba2944a3-a28c-4b08-a1b2-fc0c04eca5d8", "Ashish Gupta", "student.demo@slrtce.in", hash_pw("demo-student-2026"), "Student"),
-        ("admin-001-uuid", "Ashish Gupta (Admin)", "ashish.g.gupta25@slrtce.in", hash_pw("demo-admin-2026"), "Admin"),
-        ("comp-001-uuid", "TechVedika Recruiter", "recruiter@techvedika.in", hash_pw("demo-company-2026"), "Company"),
-        ("coll-001-uuid", "SLRTCE TPO", "tpo@slrtce.in", hash_pw("demo-college-2026"), "College"),
-        ("fac-001-uuid", "Dr. Faculty", "faculty@slrtce.in", hash_pw("demo-faculty-2026"), "Faculty"),
-    ]
-    for uid, name, email, pw_hash, role in seed_users:
-        cursor.execute("INSERT OR IGNORE INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       (uid, name, email, pw_hash, role, datetime.now(timezone.utc).isoformat()))
+    # Clean up all fake/demo accounts permanently
+    dummy_emails = ['student.demo@slrtce.in', 'ashish.g.gupta25@slrtce.in', 'recruiter@techvedika.in', 'tpo@slrtce.in', 'faculty@slrtce.in']
+    cursor.execute(f"DELETE FROM users WHERE email IN ({','.join(['?']*len(dummy_emails))})", dummy_emails)
 
     # Seed default challenges if empty
     cursor.execute("SELECT COUNT(*) as cnt FROM challenges")
@@ -277,7 +289,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     role: str = "Student"
-    otp: Optional[str] = None
+    otp: str  # MANDATORY: OTP is required for all registrations
 
 class LoginRequest(BaseModel):
     email: str
@@ -311,16 +323,19 @@ class CopilotChatRequest(BaseModel):
 # ----------------- Authentication & Email Endpoints -----------------
 @app.post("/api/auth/send-otp")
 def send_otp(req: SendOtpRequest):
-    email = req.email.strip().lower()
-    if "@" not in email or "." not in email:
-        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+    email = validate_real_email(req.email)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="An account with this email already exists. Please Sign In.")
 
     otp = f"{random.randint(100000, 999999)}"
     now = datetime.now(timezone.utc)
     expires = now + timedelta(minutes=10)
 
-    conn = get_db()
-    cursor = conn.cursor()
     cursor.execute("""
     INSERT INTO email_otps (email, otp, expires_at, created_at)
     VALUES (?, ?, ?, ?)
@@ -332,72 +347,78 @@ def send_otp(req: SendOtpRequest):
     sent = send_otp_email(email, otp, req.name or "Candidate")
     return {
         "success": True,
-        "message": f"Verification code sent to {email}",
+        "message": f"6-digit verification code sent to {email}",
         "email_delivered": sent,
         "dev_otp": otp if not sent else None
     }
 
 @app.post("/api/auth/register")
 def register(req: RegisterRequest):
-    email = req.email.strip().lower()
+    email = validate_real_email(req.email)
+    
+    if not req.otp or len(req.otp.strip()) != 6:
+        raise HTTPException(status_code=400, detail="A valid 6-digit email OTP is mandatory to verify your account.")
+
     conn = get_db()
     cursor = conn.cursor()
 
-    # If OTP was provided, verify it
-    if req.otp:
-        cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
-        otp_row = cursor.fetchone()
-        if not otp_row or otp_row["otp"] != req.otp.strip():
-            conn.close()
-            raise HTTPException(status_code=400, detail="Invalid or incorrect OTP code")
-        
-        expires_at = datetime.fromisoformat(otp_row["expires_at"])
-        if datetime.now(timezone.utc) > expires_at:
-            conn.close()
-            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+    # Strictly verify OTP
+    cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
+    otp_row = cursor.fetchone()
+    if not otp_row or otp_row["otp"] != req.otp.strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code sent to your email.")
+    
+    expires_at = datetime.fromisoformat(otp_row["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        conn.close()
+        raise HTTPException(status_code=400, detail="OTP has expired. Please click 'Resend OTP' to get a new code.")
 
     cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
     if cursor.fetchone():
         conn.close()
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+        raise HTTPException(status_code=400, detail="User with this email already exists. Please Sign In.")
 
     user_id = str(uuid.uuid4())
     pw_hash = hash_pw(req.password)
     now = datetime.now(timezone.utc).isoformat()
-    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", (user_id, req.name, email, pw_hash, req.role, now))
+    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", (user_id, req.name.strip(), email, pw_hash, req.role, now))
     
-    # Clean up verified OTP
+    # Delete consumed OTP
     cursor.execute("DELETE FROM email_otps WHERE email = ?", (email,))
     conn.commit()
     conn.close()
 
-    # Welcome email
+    # Send Welcome Email
     welcome_html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px;">
       <h2 style="color: #3b82f6;">Welcome to LinktoCompany, {req.name}!</h2>
-      <p style="color: #94a3b8;">Your account as <strong>{req.role}</strong> is now verified and active.</p>
+      <p style="color: #94a3b8;">Your account as <strong>{req.role}</strong> has been successfully verified.</p>
       <p style="color: #e2e8f0;">Start verifying skills, solving company challenges, and accessing smart career roadmaps.</p>
     </div>
     """
-    send_email(email, "Welcome to LinktoCompany · Proof over claims", welcome_html)
+    send_email(email, "Welcome to LinktoCompany · Real Verified Profile", welcome_html)
 
     token = create_token(user_id, req.role)
     return {
         "token": token,
-        "user": {"id": user_id, "name": req.name, "email": email, "role": req.role}
+        "user": {"id": user_id, "name": req.name.strip(), "email": email, "role": req.role}
     }
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
-    email = req.email.strip().lower()
+    email = validate_real_email(req.email)
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, email, password_hash, role FROM users WHERE email = ?", (email,))
     row = cursor.fetchone()
     conn.close()
 
-    if not row or row["password_hash"] != hash_pw(req.password):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
+    if not row:
+        raise HTTPException(status_code=400, detail="No registered account found with this email. Please register and verify your email first.")
+
+    if row["password_hash"] != hash_pw(req.password):
+        raise HTTPException(status_code=400, detail="Incorrect password. Please try again.")
 
     token = create_token(row["id"], row["role"])
     return {
@@ -549,7 +570,6 @@ def submit_challenge(req: SubmitChallengeRequest, user: dict = Depends(get_curre
         conn.close()
         raise HTTPException(status_code=404, detail="Challenge not found")
 
-    # Deterministic scoring based on submission complexity and quality
     base = 82 + (int(hashlib.md5(f"{user['id']}-{req.github_url}".encode()).hexdigest(), 16) % 15)
     score = min(98, base)
 
@@ -612,7 +632,7 @@ def copilot_chat(req: CopilotChatRequest):
 
     if "next" in msg or "learn" in msg:
         reply = (
-            "Based on your profile and industry demand on LinktoCompany, here is your prioritized next step:\n\n"
+            "Based on your verified skills and industry demand on LinktoCompany, here is your prioritized next step:\n\n"
             "1. **Node.js & Express REST APIs**: Complete backend assessment to unlock full-stack matchmaking.\n"
             "2. **MongoDB Data Modeling**: Complete our database challenge to gain a 'Challenge Proven' credential.\n"
             "3. **JWT Authentication & Docker**: Integrate security and containerization into your portfolio project.\n\n"

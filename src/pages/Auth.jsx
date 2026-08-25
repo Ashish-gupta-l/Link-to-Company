@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, KeyRound, Loader2, Mail, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, ShieldCheck, CheckCircle2, Lock } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -8,19 +8,11 @@ import { Button } from '../components/ui/button';
 import { useToast } from '../hooks/use-toast';
 import { authApi, saveSession } from '../lib/api';
 
-const demoRoles = [
-  { role: 'Admin', email: 'ashish.g.gupta25@slrtce.in', password: 'demo-admin-2026' },
-  { role: 'Student', email: 'student.demo@slrtce.in', password: 'demo-student-2026' },
-  { role: 'Company', email: 'recruiter@techvedika.in', password: 'demo-company-2026' },
-  { role: 'College', email: 'tpo@slrtce.in', password: 'demo-college-2026' },
-  { role: 'Faculty', email: 'faculty@slrtce.in', password: 'demo-faculty-2026' },
-];
-
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Login State (clean, empty by default)
+  // Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
@@ -34,17 +26,10 @@ const Auth = () => {
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showDemoPresets, setShowDemoPresets] = useState(false);
-
-  const seedRole = (r) => {
-    setEmail(r.email);
-    setPassword(r.password);
-    toast({ title: `Seeded ${r.role} Account`, description: r.email });
-  };
 
   const handleSendOtp = async () => {
-    if (!regEmail || !regEmail.includes('@')) {
-      toast({ title: 'Invalid Email', description: 'Please enter a valid email address first.', variant: 'destructive' });
+    if (!regEmail || !regEmail.includes('@') || !regEmail.includes('.')) {
+      toast({ title: 'Invalid Email', description: 'Please enter a valid real email address (e.g. name@gmail.com).', variant: 'destructive' });
       return;
     }
     setSendingOtp(true);
@@ -52,12 +37,12 @@ const Auth = () => {
       const res = await authApi.sendOtp(regEmail, regName);
       setOtpSent(true);
       if (res.dev_otp) {
-        toast({ title: 'Verification Code Sent!', description: `OTP: ${res.dev_otp} (Sent to ${regEmail})` });
+        toast({ title: 'Verification Code Generated', description: `Your 6-Digit OTP: ${res.dev_otp}` });
       } else {
-        toast({ title: 'Verification Email Sent!', description: `Check your inbox at ${regEmail} for the 6-digit OTP code.` });
+        toast({ title: 'Verification Code Sent!', description: `Check your inbox at ${regEmail} for the 6-digit code.` });
       }
     } catch (err) {
-      toast({ title: 'Error sending OTP', description: err?.response?.data?.detail || 'Failed to send verification email.', variant: 'destructive' });
+      toast({ title: 'OTP Error', description: err?.response?.data?.detail || 'Failed to send verification code.', variant: 'destructive' });
     } finally {
       setSendingOtp(false);
     }
@@ -66,17 +51,17 @@ const Auth = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
-      toast({ title: 'Missing fields', description: 'Please enter your email and password.', variant: 'destructive' });
+      toast({ title: 'Missing fields', description: 'Please enter your registered email and password.', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
       const res = await authApi.login({ email, password });
       saveSession(res.token, res.user);
-      toast({ title: 'Signed in', description: `Welcome back, ${res.user.name} (${res.user.role})` });
+      toast({ title: 'Signed In', description: `Welcome back, ${res.user.name}` });
       navigate('/dashboard');
     } catch (err) {
-      toast({ title: 'Login failed', description: err?.response?.data?.detail || 'Check your email and password.', variant: 'destructive' });
+      toast({ title: 'Login Failed', description: err?.response?.data?.detail || 'Invalid email or password. Please register first.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -88,6 +73,10 @@ const Auth = () => {
       toast({ title: 'Missing fields', description: 'Please fill all required fields.', variant: 'destructive' });
       return;
     }
+    if (!otpSent || !regOtp || regOtp.trim().length !== 6) {
+      toast({ title: 'Email Verification Required', description: 'Please click "Send OTP" and enter the 6-digit verification code sent to your email.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     try {
       const res = await authApi.register({
@@ -95,13 +84,13 @@ const Auth = () => {
         email: regEmail,
         password: regPassword,
         role: regRole,
-        otp: regOtp || undefined
+        otp: regOtp.trim()
       });
       saveSession(res.token, res.user);
       toast({ title: 'Account Verified & Created!', description: `Welcome to LinktoCompany, ${res.user.name}` });
       navigate('/dashboard');
     } catch (err) {
-      toast({ title: 'Registration failed', description: err?.response?.data?.detail || 'Try again.', variant: 'destructive' });
+      toast({ title: 'Verification Failed', description: err?.response?.data?.detail || 'Incorrect or expired OTP.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -129,52 +118,24 @@ const Auth = () => {
               <span className="text-blue-500">Verified access.</span>
             </h1>
             <p className="text-white/55 mt-6 max-w-md leading-relaxed">
-              Sign up with your <strong>real email address</strong> to build your permanent verified talent profile, earn assessment badges, and get direct recruiter interviews.
+              LinktoCompany uses <strong>mandatory real-email verification</strong>. Fake accounts are blocked so companies only connect with authentic, verified talent.
             </p>
 
-            {/* Email verification feature bullet points */}
             <div className="mt-8 space-y-3 max-w-md">
-              <div className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-[#0b0d13]">
-                <Mail className="text-emerald-400 shrink-0" size={18} />
-                <div className="text-xs text-white/70">
-                  <span className="font-semibold text-white">Live Email Verification:</span> 6-digit OTP delivered directly to your inbox.
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
+                <Mail className="text-emerald-400 shrink-0" size={20} />
+                <div>
+                  <div className="text-sm font-semibold text-white">Mandatory OTP Verification</div>
+                  <div className="text-xs text-white/50 mt-0.5">Every account requires a verified real email address via 6-digit OTP.</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-[#0b0d13]">
-                <ShieldCheck className="text-blue-400 shrink-0" size={18} />
-                <div className="text-xs text-white/70">
-                  <span className="font-semibold text-white">Secure JWT Tokens:</span> Role-aware dashboards for Students, Companies, Colleges, and Faculty.
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
+                <ShieldCheck className="text-blue-400 shrink-0" size={20} />
+                <div>
+                  <div className="text-sm font-semibold text-white">Anti-Fake Candidate Graph</div>
+                  <div className="text-xs text-white/50 mt-0.5">Disposable domains are blocked. Verified skill assessment records are tied to real credentials.</div>
                 </div>
               </div>
-            </div>
-
-            {/* Quick Demo Presets Toggle */}
-            <div className="mt-8 max-w-md">
-              <button
-                type="button"
-                onClick={() => setShowDemoPresets(!showDemoPresets)}
-                className="text-xs text-white/40 hover:text-white/70 transition-colors flex items-center gap-1.5 font-mono"
-              >
-                <KeyRound size={13} /> {showDemoPresets ? 'Hide Hackathon Demo Presets' : 'Need quick Hackathon Demo Accounts? Click here'}
-              </button>
-
-              {showDemoPresets && (
-                <div className="mt-3 space-y-2">
-                  {demoRoles.map((r) => (
-                    <button
-                      key={r.role}
-                      onClick={() => seedRole(r)}
-                      className="w-full flex items-center justify-between rounded-md border border-white/10 bg-[#0b0d13] hover:border-emerald-500/40 hover:bg-[#0e1218] transition-all px-4 py-2.5 text-left"
-                    >
-                      <div>
-                        <div className="text-white font-semibold text-xs">{r.role}</div>
-                        <div className="text-white/40 text-[11px] font-mono">{r.email}</div>
-                      </div>
-                      <KeyRound size={14} className="text-emerald-400" />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
@@ -182,7 +143,7 @@ const Auth = () => {
           <div>
             <div className="rounded-xl border border-white/10 bg-[#0b0d13] p-7 shadow-2xl">
               <h2 className="font-display font-black text-white text-2xl">Access LinktoCompany</h2>
-              <p className="text-white/50 text-sm mt-1">Sign in with your email or register a new verified account.</p>
+              <p className="text-white/50 text-sm mt-1">Sign in with your verified credentials or create a new account.</p>
 
               <Tabs defaultValue="login" className="mt-6">
                 <TabsList className="w-full grid grid-cols-2 bg-[#0a0c11] border border-white/10 p-1">
@@ -198,12 +159,12 @@ const Auth = () => {
                 <TabsContent value="login" className="mt-5">
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                      <Label className="text-white/80">Your Email Address</Label>
+                      <Label className="text-white/80">Your Registered Email</Label>
                       <Input
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         type="email"
-                        placeholder="you@example.com"
+                        placeholder="you@gmail.com"
                         required
                         className="mt-2 bg-[#0a0c11] border-white/10 text-white placeholder:text-white/30"
                       />
@@ -233,7 +194,7 @@ const Auth = () => {
                       <Input
                         value={regName}
                         onChange={(e) => setRegName(e.target.value)}
-                        placeholder="e.g. Ashish Gupta"
+                        placeholder="Your full name"
                         required
                         className="mt-2 bg-[#0a0c11] border-white/10 text-white placeholder:text-white/30"
                       />
@@ -261,19 +222,24 @@ const Auth = () => {
                       </div>
                     </div>
 
-                    {otpSent && (
-                      <div className="p-3 rounded-md bg-emerald-500/10 border border-emerald-500/30">
-                        <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono mb-2">
-                          <CheckCircle2 size={14} /> Verification OTP sent to {regEmail}
+                    {otpSent ? (
+                      <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
+                          <CheckCircle2 size={15} /> 6-digit OTP code sent to {regEmail}
                         </div>
-                        <Label className="text-xs text-white/80">Enter 6-Digit Email OTP</Label>
+                        <Label className="text-xs text-white/90">Enter 6-Digit Email OTP *</Label>
                         <Input
                           value={regOtp}
                           onChange={(e) => setRegOtp(e.target.value)}
                           placeholder="123456"
                           maxLength={6}
-                          className="mt-1 bg-[#0a0c11] border-white/10 text-white font-mono text-center tracking-widest text-lg"
+                          required
+                          className="bg-[#0a0c11] border-white/20 text-white font-mono text-center tracking-widest text-lg font-bold"
                         />
+                      </div>
+                    ) : (
+                      <div className="text-xs text-white/40 font-mono">
+                        * Click <strong>"Send OTP"</strong> above to receive a 6-digit code and verify your email.
                       </div>
                     )}
 
@@ -284,15 +250,15 @@ const Auth = () => {
                         onChange={(e) => setRegRole(e.target.value)}
                         className="mt-2 w-full bg-[#0a0c11] border border-white/10 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-400"
                       >
-                        <option value="Student">Student (Job seeker, take assessments, solve challenges)</option>
-                        <option value="Company">Company (Recruiter, post challenges, review talent)</option>
-                        <option value="College">College (TPO, track student readiness & metrics)</option>
-                        <option value="Faculty">Faculty (Mentorship, FDPs & research collaboration)</option>
+                        <option value="Student">Student (Job seeker, skill verification)</option>
+                        <option value="Company">Company (Recruiter, post challenges)</option>
+                        <option value="College">College (TPO, track readiness)</option>
+                        <option value="Faculty">Faculty (Mentorship, FDPs)</option>
                       </select>
                     </div>
 
                     <div>
-                      <Label className="text-white/80">Create Password</Label>
+                      <Label className="text-white/80">Password</Label>
                       <Input
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
@@ -303,8 +269,8 @@ const Auth = () => {
                       />
                     </div>
 
-                    <Button type="submit" disabled={loading} className="w-full bg-emerald-400 hover:bg-emerald-300 text-black font-semibold py-2.5">
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : 'Create Verified Account'}
+                    <Button type="submit" disabled={loading || !otpSent} className="w-full bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-black font-semibold py-2.5">
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : 'Verify OTP & Create Account'}
                     </Button>
                   </form>
                 </TabsContent>
