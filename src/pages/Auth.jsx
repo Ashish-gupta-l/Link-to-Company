@@ -36,10 +36,18 @@ const Auth = () => {
     try {
       const res = await authApi.sendOtp(regEmail, regName);
       setOtpSent(true);
-      toast({
-        title: 'OTP Sent to Your Email!',
-        description: `Check your Gmail inbox (${regEmail}) for the 6-digit verification code.`,
-      });
+      if (res.email_delivered) {
+        toast({
+          title: 'OTP Delivered to Email!',
+          description: `Check your Gmail inbox / spam folder at ${regEmail} for your 6-digit code.`,
+        });
+      } else {
+        toast({
+          title: 'Email Delivery Notification',
+          description: res.delivery_status || 'Email server error. Check server logs.',
+          variant: 'destructive',
+        });
+      }
     } catch (err) {
       toast({
         title: 'Failed to Send Email OTP',
