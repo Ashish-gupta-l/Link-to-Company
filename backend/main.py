@@ -4,6 +4,10 @@ import uuid
 import json
 import sqlite3
 import hashlib
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 
@@ -11,12 +15,19 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import jwt
 
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "linktocompany-sih-2026-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
+
+# Email API / SMTP Configuration
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "noreply@linktocompany.com")
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
@@ -29,6 +40,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ----------------- Email Service -----------------
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        print(f"[EMAIL SERVICE (MOCK)] To: {to_email} | Subject: {subject}")
+        print(f"[EMAIL SERVICE (MOCK)] Content: {html_content[:150]}...")
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"LinktoCompany <{EMAIL_FROM}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html"))
+
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(EMAIL_FROM, [to_email], msg.as_string())
+        server.quit()
+        print(f"[EMAIL SENT] Successfully delivered to {to_email}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] Failed to send email to {to_email}: {e}")
+        return False
+
+def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate"):
+    subject = f"Your LinktoCompany Verification Code: {otp}"
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #3b82f6; margin: 0; font-size: 24px;">LinktoCompany</h1>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Skill Proof Network · SIH 2026</p>
+      </div>
+      <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: center;">
+        <p style="color: #e2e8f0; font-size: 15px; margin-bottom: 15px;">Hello {user_name},</p>
+        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Use the following One-Time Password (OTP) to verify your real email address and access your LinktoCompany account:</p>
+        <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #34d399; padding: 15px 0; background: rgba(52, 211, 153, 0.1); border-radius: 6px; display: inline-block; width: 80%;">
+          {otp}
+        </div>
+        <p style="color: #64748b; font-size: 12px; margin-top: 20px;">This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
+      </div>
+      <div style="text-align: center; margin-top: 25px; color: #64748b; font-size: 11px;">
+        © 2026 LinktoCompany · Built for Smart India Hackathon
+      </div>
+    </div>
+    """
+    return send_email(to_email, subject, html)
 
 # ----------------- Database Setup & Helpers -----------------
 def get_db():
@@ -121,6 +179,14 @@ def init_db():
     )
     """)
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS email_otps (
+        email TEXT PRIMARY KEY,
+        otp TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS attempts (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -202,11 +268,16 @@ def init_db():
 init_db()
 
 # ----------------- Request Models -----------------
+class SendOtpRequest(BaseModel):
+    email: str
+    name: Optional[str] = "Candidate"
+
 class RegisterRequest(BaseModel):
     name: str
     email: str
     password: str
     role: str = "Student"
+    otp: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str
@@ -237,12 +308,55 @@ class CopilotChatRequest(BaseModel):
     session_id: str
     message: str
 
-# ----------------- Authentication Endpoints -----------------
-@app.post("/api/auth/register")
-def register(req: RegisterRequest):
+# ----------------- Authentication & Email Endpoints -----------------
+@app.post("/api/auth/send-otp")
+def send_otp(req: SendOtpRequest):
+    email = req.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+
+    otp = f"{random.randint(100000, 999999)}"
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=10)
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (req.email,))
+    cursor.execute("""
+    INSERT INTO email_otps (email, otp, expires_at, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET otp = excluded.otp, expires_at = excluded.expires_at, created_at = excluded.created_at
+    """, (email, otp, expires.isoformat(), now.isoformat()))
+    conn.commit()
+    conn.close()
+
+    sent = send_otp_email(email, otp, req.name or "Candidate")
+    return {
+        "success": True,
+        "message": f"Verification code sent to {email}",
+        "email_delivered": sent,
+        "dev_otp": otp if not sent else None
+    }
+
+@app.post("/api/auth/register")
+def register(req: RegisterRequest):
+    email = req.email.strip().lower()
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # If OTP was provided, verify it
+    if req.otp:
+        cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
+        otp_row = cursor.fetchone()
+        if not otp_row or otp_row["otp"] != req.otp.strip():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Invalid or incorrect OTP code")
+        
+        expires_at = datetime.fromisoformat(otp_row["expires_at"])
+        if datetime.now(timezone.utc) > expires_at:
+            conn.close()
+            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="User with this email already exists")
@@ -250,21 +364,35 @@ def register(req: RegisterRequest):
     user_id = str(uuid.uuid4())
     pw_hash = hash_pw(req.password)
     now = datetime.now(timezone.utc).isoformat()
-    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", (user_id, req.name, req.email, pw_hash, req.role, now))
+    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", (user_id, req.name, email, pw_hash, req.role, now))
+    
+    # Clean up verified OTP
+    cursor.execute("DELETE FROM email_otps WHERE email = ?", (email,))
     conn.commit()
     conn.close()
+
+    # Welcome email
+    welcome_html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px;">
+      <h2 style="color: #3b82f6;">Welcome to LinktoCompany, {req.name}!</h2>
+      <p style="color: #94a3b8;">Your account as <strong>{req.role}</strong> is now verified and active.</p>
+      <p style="color: #e2e8f0;">Start verifying skills, solving company challenges, and accessing smart career roadmaps.</p>
+    </div>
+    """
+    send_email(email, "Welcome to LinktoCompany · Proof over claims", welcome_html)
 
     token = create_token(user_id, req.role)
     return {
         "token": token,
-        "user": {"id": user_id, "name": req.name, "email": req.email, "role": req.role}
+        "user": {"id": user_id, "name": req.name, "email": email, "role": req.role}
     }
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
+    email = req.email.strip().lower()
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, password_hash, role FROM users WHERE email = ?", (req.email,))
+    cursor.execute("SELECT id, name, email, password_hash, role FROM users WHERE email = ?", (email,))
     row = cursor.fetchone()
     conn.close()
 
@@ -547,7 +675,6 @@ if os.path.exists(dist_dir):
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        # Don't intercept API routes that 404
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
         file_path = os.path.join(dist_dir, full_path)
