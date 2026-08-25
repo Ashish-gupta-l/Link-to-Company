@@ -106,29 +106,37 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
             return False, f"Gmail SMTP Auth Error: {e587}"
 
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    # Tier 1: Resend HTTP API (if provided)
+    # Tier 1: Resend HTTP API (Super fast, 100% cloud deliverability, free)
     if RESEND_API_KEY:
         try:
+            sender = EMAIL_FROM if ("@" in EMAIL_FROM and not "gmail" in EMAIL_FROM) else "LinktoCompany <onboarding@resend.dev>"
+            payload = json.dumps({
+                "from": sender,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content
+            }).encode("utf-8")
             req = urllib.request.Request(
                 "https://api.resend.com/emails",
                 headers={
                     "Authorization": f"Bearer {RESEND_API_KEY}",
                     "Content-Type": "application/json",
-                    "User-Agent": "LinktoCompany/1.0"
+                    "User-Agent": "LinktoCompany-SIH/1.0"
                 },
-                data=json.dumps({
-                    "from": "LinktoCompany <onboarding@resend.dev>",
-                    "to": [to_email],
-                    "subject": subject,
-                    "html": html_content
-                }).encode("utf-8")
+                data=payload,
+                method="POST"
             )
-            with urllib.request.urlopen(req, timeout=10) as res:
-                if res.status in [200, 201]:
-                    print(f"[RESEND SUCCESS] Sent to {to_email}")
-                    return True, "Delivered via Resend"
+            with urllib.request.urlopen(req, timeout=12) as res:
+                body = res.read().decode("utf-8")
+                print(f"[RESEND SUCCESS] Sent to {to_email}: {body}")
+                return True, "Delivered via Resend"
+        except urllib.error.HTTPError as he:
+            err_body = he.read().decode("utf-8")
+            print(f"[RESEND HTTP ERROR {he.code}] {err_body}")
+            return False, f"Resend API Error: {err_body}"
         except Exception as e:
-            print(f"[RESEND FAIL] {e}")
+            print(f"[RESEND ERROR] {e}")
+            return False, f"Resend Error: {e}"
 
     # Tier 2: Direct SMTP
     if SMTP_USER and SMTP_PASSWORD:
