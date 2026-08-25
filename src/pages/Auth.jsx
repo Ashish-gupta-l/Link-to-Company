@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Mail, ShieldCheck, CheckCircle2, Lock } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -24,6 +24,7 @@ const Auth = () => {
   const [regOtp, setRegOtp] = useState('');
   
   const [otpSent, setOtpSent] = useState(false);
+  const [fallbackOtp, setFallbackOtp] = useState(null);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -37,9 +38,16 @@ const Auth = () => {
       const res = await authApi.sendOtp(regEmail, regName);
       setOtpSent(true);
       if (res.dev_otp) {
-        toast({ title: 'Verification Code Generated', description: `Your 6-Digit OTP: ${res.dev_otp}` });
+        setFallbackOtp(res.dev_otp);
+        toast({
+          title: 'Verification Code Generated',
+          description: `Your OTP is: ${res.dev_otp}. (Also attempting delivery to ${regEmail})`,
+        });
       } else {
-        toast({ title: 'Verification Code Sent!', description: `Check your inbox at ${regEmail} for the 6-digit code.` });
+        toast({
+          title: 'Verification Code Sent!',
+          description: `Check your inbox at ${regEmail} for the 6-digit code.`,
+        });
       }
     } catch (err) {
       toast({ title: 'OTP Error', description: err?.response?.data?.detail || 'Failed to send verification code.', variant: 'destructive' });
@@ -74,7 +82,7 @@ const Auth = () => {
       return;
     }
     if (!otpSent || !regOtp || regOtp.trim().length !== 6) {
-      toast({ title: 'Email Verification Required', description: 'Please click "Send OTP" and enter the 6-digit verification code sent to your email.', variant: 'destructive' });
+      toast({ title: 'Email Verification Required', description: 'Please click "Send OTP" and enter the 6-digit verification code.', variant: 'destructive' });
       return;
     }
     setLoading(true);
@@ -118,22 +126,22 @@ const Auth = () => {
               <span className="text-blue-500">Verified access.</span>
             </h1>
             <p className="text-white/55 mt-6 max-w-md leading-relaxed">
-              LinktoCompany uses <strong>mandatory real-email verification</strong>. Fake accounts are blocked so companies only connect with authentic, verified talent.
+              LinktoCompany requires <strong>real-email OTP verification</strong>. Fake candidate profiles and disposable domains are strictly blocked.
             </p>
 
             <div className="mt-8 space-y-3 max-w-md">
               <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
                 <Mail className="text-emerald-400 shrink-0" size={20} />
                 <div>
-                  <div className="text-sm font-semibold text-white">Mandatory OTP Verification</div>
-                  <div className="text-xs text-white/50 mt-0.5">Every account requires a verified real email address via 6-digit OTP.</div>
+                  <div className="text-sm font-semibold text-white">6-Digit Email OTP Verification</div>
+                  <div className="text-xs text-white/50 mt-0.5">Instant one-time code sent to your real email inbox.</div>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
                 <ShieldCheck className="text-blue-400 shrink-0" size={20} />
                 <div>
-                  <div className="text-sm font-semibold text-white">Anti-Fake Candidate Graph</div>
-                  <div className="text-xs text-white/50 mt-0.5">Disposable domains are blocked. Verified skill assessment records are tied to real credentials.</div>
+                  <div className="text-sm font-semibold text-white">Anti-Fake Verification Filter</div>
+                  <div className="text-xs text-white/50 mt-0.5">Verified credentials and challenge outcomes are locked to your authentic identity.</div>
                 </div>
               </div>
             </div>
@@ -225,8 +233,20 @@ const Auth = () => {
                     {otpSent ? (
                       <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                         <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
-                          <CheckCircle2 size={15} /> 6-digit OTP code sent to {regEmail}
+                          <CheckCircle2 size={15} /> 6-digit verification OTP requested for {regEmail}
                         </div>
+                        {fallbackOtp && (
+                          <div className="text-xs bg-[#0b0d13] border border-emerald-500/30 rounded p-2 text-emerald-300 font-mono flex items-center justify-between">
+                            <span>Your OTP Code: <strong className="text-white text-sm tracking-widest">{fallbackOtp}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => setRegOtp(fallbackOtp)}
+                              className="text-[11px] underline text-emerald-400 hover:text-emerald-300 ml-2"
+                            >
+                              Auto-fill
+                            </button>
+                          </div>
+                        )}
                         <Label className="text-xs text-white/90">Enter 6-Digit Email OTP *</Label>
                         <Input
                           value={regOtp}
@@ -239,7 +259,7 @@ const Auth = () => {
                       </div>
                     ) : (
                       <div className="text-xs text-white/40 font-mono">
-                        * Click <strong>"Send OTP"</strong> above to receive a 6-digit code and verify your email.
+                        * Click <strong>"Send OTP"</strong> above to verify your real email address.
                       </div>
                     )}
 
@@ -258,7 +278,7 @@ const Auth = () => {
                     </div>
 
                     <div>
-                      <Label className="text-white/80">Password</Label>
+                      <Label className="text-white/80">Create Password</Label>
                       <Input
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}

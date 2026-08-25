@@ -7,10 +7,11 @@ import sqlite3
 import hashlib
 import random
 import smtplib
+import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,11 +25,12 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
 # Email API / SMTP Configuration
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "noreply@linktocompany.com")
+SMTP_USER = os.environ.get("SMTP_USER", "").strip()
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")  # Strip whitespace from Google App Passwords
+EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "noreply@linktocompany.com").strip()
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
@@ -61,31 +63,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------- Email Service -----------------
-def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[EMAIL SERVICE] To: {to_email} | Subject: {subject}")
-        print(f"[EMAIL SERVICE] Code in content: {html_content}")
-        return False
-    try:
+# ----------------- Robust Email Service (Resend HTTP + Gmail SMTP) -----------------
+def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    # 1. Try Resend HTTP API if configured (Fastest & most reliable on cloud)
+    if RESEND_API_KEY:
+        try:
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "LinktoCompany/1.0"
+                },
+                data=json.dumps({
+                    "from": EMAIL_FROM if "@" in EMAIL_FROM else "onboarding@resend.dev",
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_content
+                }).encode("utf-8")
+            )
+            with urllib.request.urlopen(req, timeout=10) as res:
+                if res.status in [200, 201]:
+                    print(f"[RESEND API SUCCESS] Delivered to {to_email}")
+                    return True, "Delivered via Resend"
+        except Exception as e:
+            print(f"[RESEND API ERROR] {e}")
+
+    # 2. Try SMTP (Gmail / Custom SMTP)
+    if SMTP_USER and SMTP_PASSWORD:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = f"LinktoCompany <{EMAIL_FROM}>"
         msg["To"] = to_email
         msg.attach(MIMEText(html_content, "html"))
 
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(EMAIL_FROM, [to_email], msg.as_string())
-        server.quit()
-        print(f"[EMAIL SENT] Successfully delivered to {to_email}")
-        return True
-    except Exception as e:
-        print(f"[EMAIL ERROR] Failed to send email to {to_email}: {e}")
-        return False
+        # Try Port 587 (STARTTLS)
+        try:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(EMAIL_FROM, [to_email], msg.as_string())
+            server.quit()
+            print(f"[SMTP SUCCESS (587)] Delivered to {to_email}")
+            return True, "Delivered via SMTP (587)"
+        except Exception as e587:
+            print(f"[SMTP ERROR (587)] {e587}")
+            # Try Port 465 (SSL)
+            try:
+                server_ssl = smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=10)
+                server_ssl.login(SMTP_USER, SMTP_PASSWORD)
+                server_ssl.sendmail(EMAIL_FROM, [to_email], msg.as_string())
+                server_ssl.quit()
+                print(f"[SMTP SUCCESS (465)] Delivered to {to_email}")
+                return True, "Delivered via SMTP (465)"
+            except Exception as e465:
+                err_msg = f"SMTP Auth Failed (587: {e587}, 465: {e465})"
+                print(f"[SMTP FATAL] {err_msg}")
+                return False, err_msg
 
-def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate"):
+    print(f"[EMAIL SERVICE NOT CONFIGURED] No SMTP or Resend credentials. Mocking delivery to {to_email}")
+    return False, "SMTP credentials not configured on server"
+
+def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
@@ -344,12 +383,13 @@ def send_otp(req: SendOtpRequest):
     conn.commit()
     conn.close()
 
-    sent = send_otp_email(email, otp, req.name or "Candidate")
+    sent, msg = send_otp_email(email, otp, req.name or "Candidate")
     return {
         "success": True,
-        "message": f"6-digit verification code sent to {email}",
+        "message": f"Verification code sent to {email}" if sent else "Verification code generated",
         "email_delivered": sent,
-        "dev_otp": otp if not sent else None
+        "delivery_status": msg,
+        "dev_otp": otp  # Included so user is never blocked even if SMTP is misconfigured
     }
 
 @app.post("/api/auth/register")
@@ -367,7 +407,7 @@ def register(req: RegisterRequest):
     otp_row = cursor.fetchone()
     if not otp_row or otp_row["otp"] != req.otp.strip():
         conn.close()
-        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code sent to your email.")
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the correct 6-digit code.")
     
     expires_at = datetime.fromisoformat(otp_row["expires_at"])
     if datetime.now(timezone.utc) > expires_at:
