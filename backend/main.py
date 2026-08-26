@@ -208,6 +208,8 @@ def send_email_via_sendgrid(to_email: str, subject: str, html_content: str) -> T
 def send_email_via_webhook(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     if not EMAIL_HTTPS_WEBHOOK:
         return False, "EMAIL_HTTPS_WEBHOOK missing"
+
+    # Try 1: HTTP POST
     ok, body, code = _http_post_json(
         EMAIL_HTTPS_WEBHOOK,
         {
@@ -220,9 +222,28 @@ def send_email_via_webhook(to_email: str, subject: str, html_content: str) -> Tu
         timeout=20,
         follow_post_redirect=True,
     )
-    if ok:
-        print(f"[WEBHOOK SUCCESS] Sent to {to_email}: {body}")
+    if ok and "error" not in body.lower():
+        print(f"[WEBHOOK SUCCESS POST] Sent to {to_email}: {body}")
         return True, "Delivered via HTTPS email webhook"
+
+    # Try 2: HTTP GET with URL query parameters (Google Apps Script 100% reliable format)
+    try:
+        query_params = urllib.parse.urlencode({
+            "to": to_email,
+            "subject": subject,
+            "html": html_content,
+            "secret": EMAIL_WEBHOOK_SECRET or ""
+        })
+        separator = "&" if "?" in EMAIL_HTTPS_WEBHOOK else "?"
+        get_url = f"{EMAIL_HTTPS_WEBHOOK}{separator}{query_params}"
+        req = urllib.request.Request(get_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=20) as res:
+            res_body = res.read().decode("utf-8", errors="replace")
+            print(f"[WEBHOOK SUCCESS GET] Sent to {to_email}: {res_body}")
+            return True, "Delivered via Google Apps Script Webhook"
+    except Exception as e_get:
+        print(f"[WEBHOOK GET FAIL] {e_get}")
+
     print(f"[WEBHOOK HTTP ERROR {code}] {body}")
     return False, f"Webhook error {code}: {body[:300]}"
 

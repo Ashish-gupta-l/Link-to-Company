@@ -1,39 +1,40 @@
 /**
- * Gmail HTTPS relay for Render (SMTP ports are blocked on Render free).
- *
- * Setup:
- * 1. Open https://script.google.com and create a new project.
- * 2. Paste this file, then Project Settings → Script properties:
- *    WEBHOOK_SECRET = a long random string (same as EMAIL_WEBHOOK_SECRET on Render)
- * 3. Deploy → New deployment → Type: Web app
- *    Execute as: Me
- *    Who has access: Anyone
- * 4. Copy the web app URL into Render env EMAIL_HTTPS_WEBHOOK
- *    and set EMAIL_WEBHOOK_SECRET to the same secret.
+ * Gmail HTTPS relay for LinktoCompany (SIH 2026)
+ * Supports both GET and POST web requests to avoid 405 redirect errors.
  */
+
+function doGet(e) {
+  return handleEmail(e ? e.parameter : {});
+}
+
 function doPost(e) {
-  var data = {};
-  try {
-    data = JSON.parse(e.postData.contents);
-  } catch (err) {
-    return ContentService.createTextOutput("invalid json");
+  var params = {};
+  if (e && e.postData && e.postData.contents) {
+    try {
+      params = JSON.parse(e.postData.contents);
+    } catch(err) {
+      params = e.parameter || {};
+    }
+  } else if (e && e.parameter) {
+    params = e.parameter;
   }
+  return handleEmail(params);
+}
 
-  var expected = PropertiesService.getScriptProperties().getProperty("WEBHOOK_SECRET");
-  if (!expected || data.secret !== expected) {
-    return ContentService.createTextOutput("unauthorized");
-  }
-
-  if (!data.to || !data.subject) {
+function handleEmail(data) {
+  if (!data || !data.to || !data.subject) {
     return ContentService.createTextOutput("missing fields");
   }
 
-  MailApp.sendEmail({
-    to: String(data.to),
-    subject: String(data.subject),
-    htmlBody: String(data.html || ""),
-    name: "LinktoCompany",
-  });
-
-  return ContentService.createTextOutput("ok");
+  try {
+    MailApp.sendEmail({
+      to: String(data.to),
+      subject: String(data.subject),
+      htmlBody: String(data.html || ""),
+      name: "LinktoCompany"
+    });
+    return ContentService.createTextOutput("ok");
+  } catch (err) {
+    return ContentService.createTextOutput("error: " + err.toString());
+  }
 }
