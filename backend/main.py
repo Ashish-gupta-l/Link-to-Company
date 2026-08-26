@@ -269,14 +269,7 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     errors = []
 
-    # 1. Direct Gmail SMTP (Verified & Working)
-    if SMTP_USER and SMTP_PASSWORD:
-        ok, msg = send_email_via_smtp(to_email, subject, html_content)
-        if ok:
-            return True, msg
-        errors.append(f"smtp: {msg}")
-
-    # 2. HTTPS Providers (Resend, Brevo, SendGrid, Webhook)
+    # 1. HTTPS Providers (Uses Port 443 - 100% Allowed on Render Cloud)
     providers = [
         ("resend", RESEND_API_KEY, send_email_via_resend),
         ("brevo", BREVO_API_KEY, send_email_via_brevo),
@@ -290,6 +283,13 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
         if ok:
             return True, msg
         errors.append(f"{name}: {msg}")
+
+    # 2. SMTP (Works locally, but blocked on Render Free cloud tier)
+    if SMTP_USER and SMTP_PASSWORD:
+        ok, msg = send_email_via_smtp(to_email, subject, html_content)
+        if ok:
+            return True, msg
+        errors.append(f"smtp: {msg}")
 
     print(f"[EMAIL FAIL] To: {to_email} | {' | '.join(errors) or 'no email provider configured'}")
     err_detail = " | ".join(errors) if errors else "Email delivery failed. Please check SMTP/API configuration."
