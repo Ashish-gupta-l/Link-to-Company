@@ -1,7 +1,6 @@
 import os
 import re
 import ssl
-import html as html_lib
 import time
 import uuid
 import json
@@ -9,8 +8,8 @@ import sqlite3
 import hashlib
 import random
 import smtplib
+import html as html_lib
 import urllib.request
-import urllib.error
 import urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -29,8 +28,6 @@ SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "linktocompany-sih-2026-secret-key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
-# Email API / SMTP Configuration
-# Render free web services block outbound SMTP (25/465/587). Use HTTPS APIs first.
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
@@ -41,11 +38,6 @@ BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "").strip()
 EMAIL_HTTPS_WEBHOOK = os.environ.get("EMAIL_HTTPS_WEBHOOK", "").strip()
 EMAIL_WEBHOOK_SECRET = os.environ.get("EMAIL_WEBHOOK_SECRET", "").strip()
-ON_RENDER = os.environ.get("RENDER", "").lower() in ("true", "1")
-CONSUMER_MAIL_DOMAINS = {
-    "gmail.com", "googlemail.com", "yahoo.com", "outlook.com",
-    "hotmail.com", "live.com", "icloud.com", "me.com",
-}
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
@@ -60,14 +52,12 @@ def validate_real_email(email: str) -> str:
     email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     if not re.match(email_regex, email):
         raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address.")
-    
     domain = email.split("@")[-1]
     if domain in BLOCKED_DOMAINS or "temp" in domain or "fake" in domain or "disposable" in domain:
         raise HTTPException(status_code=400, detail="Temporary or disposable email domains are not allowed. Use your real email.")
-    
     return email
 
-app = FastAPI(title="LinktoCompany API", version="1.0.0")
+app = FastAPI(title="LinktoCompany API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,20 +67,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------- Automated Multi-Tier Email Service -----------------
+# ----------------- Email Service -----------------
 class _KeepPostRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Google Apps Script web apps 302 and drop POST bodies unless we preserve them."""
-
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if code not in (301, 302, 303, 307, 308):
             return None
-        return urllib.request.Request(
-            newurl,
-            data=req.data,
-            headers=dict(req.header_items()),
-            method="POST",
-        )
-
+        return urllib.request.Request(newurl, data=req.data, headers=dict(req.header_items()), method="POST")
 
 def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 15, follow_post_redirect: bool = False) -> Tuple[bool, str, int]:
     body = json.dumps(payload).encode("utf-8")
@@ -110,32 +92,15 @@ def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 15, f
     except Exception as e:
         return False, str(e), 0
 
-
-def _sender_email() -> str:
-    return EMAIL_FROM or SMTP_USER or ""
-
-
-def _resend_from() -> str:
-    sender = _sender_email()
-    if sender and "@" in sender:
-        domain = sender.split("@")[-1].lower()
-        if domain not in CONSUMER_MAIL_DOMAINS:
-            return f"LinktoCompany <{sender}>"
-    return "LinktoCompany <onboarding@resend.dev>"
-
-
 def send_email_via_resend(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     if not RESEND_API_KEY:
         return False, "Resend API key missing"
-    reply_to = _sender_email() or None
     payload = {
-        "from": _resend_from(),
+        "from": "LinktoCompany <onboarding@resend.dev>",
         "to": [to_email],
         "subject": subject,
         "html": html_content,
     }
-    if reply_to and "@" in reply_to:
-        payload["reply_to"] = reply_to
     ok, body, code = _http_post_json(
         "https://api.resend.com/emails",
         payload,
@@ -146,175 +111,84 @@ def send_email_via_resend(to_email: str, subject: str, html_content: str) -> Tup
         },
     )
     if ok:
-        print(f"[RESEND SUCCESS] Sent to {to_email}: {body}")
         return True, "Delivered via Resend"
-    print(f"[RESEND HTTP ERROR {code}] {body}")
-    return False, f"Resend error {code}: {body[:300]}"
-
-
-def send_email_via_brevo(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    if not BREVO_API_KEY:
-        return False, "Brevo API key missing"
-    sender = _sender_email()
-    if not sender or "@" not in sender:
-        return False, "EMAIL_FROM / SMTP_USER required for Brevo"
-    ok, body, code = _http_post_json(
-        "https://api.brevo.com/v3/smtp/email",
-        {
-            "sender": {"name": "LinktoCompany", "email": sender},
-            "to": [{"email": to_email}],
-            "subject": subject,
-            "htmlContent": html_content,
-        },
-        {
-            "api-key": BREVO_API_KEY,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
-    if ok:
-        print(f"[BREVO SUCCESS] Sent to {to_email}: {body}")
-        return True, "Delivered via Brevo"
-    print(f"[BREVO HTTP ERROR {code}] {body}")
-    return False, f"Brevo error {code}: {body[:300]}"
-
-
-def send_email_via_sendgrid(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    if not SENDGRID_API_KEY:
-        return False, "SendGrid API key missing"
-    sender = _sender_email()
-    if not sender or "@" not in sender:
-        return False, "EMAIL_FROM / SMTP_USER required for SendGrid"
-    ok, body, code = _http_post_json(
-        "https://api.sendgrid.com/v3/mail/send",
-        {
-            "personalizations": [{"to": [{"email": to_email}]}],
-            "from": {"email": sender, "name": "LinktoCompany"},
-            "subject": subject,
-            "content": [{"type": "text/html", "value": html_content}],
-        },
-        {
-            "Authorization": f"Bearer {SENDGRID_API_KEY}",
-            "Content-Type": "application/json",
-        },
-    )
-    if ok or code in (200, 202):
-        print(f"[SENDGRID SUCCESS] Sent to {to_email}")
-        return True, "Delivered via SendGrid"
-    print(f"[SENDGRID HTTP ERROR {code}] {body}")
-    return False, f"SendGrid error {code}: {body[:300]}"
-
+    return False, f"Resend error {code}: {body[:200]}"
 
 def send_email_via_webhook(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     if not EMAIL_HTTPS_WEBHOOK:
         return False, "EMAIL_HTTPS_WEBHOOK missing"
-
-    # Try 1: HTTP POST
+    
+    # Try POST
     ok, body, code = _http_post_json(
         EMAIL_HTTPS_WEBHOOK,
-        {
-            "to": to_email,
-            "subject": subject,
-            "html": html_content,
-            "secret": EMAIL_WEBHOOK_SECRET,
-        },
+        {"to": to_email, "subject": subject, "html": html_content, "secret": EMAIL_WEBHOOK_SECRET},
         {"Content-Type": "application/json"},
-        timeout=20,
+        timeout=15,
         follow_post_redirect=True,
     )
     if ok and "error" not in body.lower():
-        print(f"[WEBHOOK SUCCESS POST] Sent to {to_email}: {body}")
         return True, "Delivered via HTTPS email webhook"
 
-    # Try 2: HTTP GET with URL query parameters (Google Apps Script 100% reliable format)
+    # Try GET Query Params
     try:
-        query_params = urllib.parse.urlencode({
-            "to": to_email,
-            "subject": subject,
-            "html": html_content,
-            "secret": EMAIL_WEBHOOK_SECRET or ""
-        })
+        query_params = urllib.parse.urlencode({"to": to_email, "subject": subject, "html": html_content})
         separator = "&" if "?" in EMAIL_HTTPS_WEBHOOK else "?"
-        get_url = f"{EMAIL_HTTPS_WEBHOOK}{separator}{query_params}"
-        req = urllib.request.Request(get_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=20) as res:
+        req = urllib.request.Request(f"{EMAIL_HTTPS_WEBHOOK}{separator}{query_params}", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as res:
             res_body = res.read().decode("utf-8", errors="replace")
-            print(f"[WEBHOOK SUCCESS GET] Sent to {to_email}: {res_body}")
             return True, "Delivered via Google Apps Script Webhook"
     except Exception as e_get:
-        print(f"[WEBHOOK GET FAIL] {e_get}")
-
-    print(f"[WEBHOOK HTTP ERROR {code}] {body}")
-    return False, f"Webhook error {code}: {body[:300]}"
-
+        return False, f"Webhook error: {e_get}"
 
 def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     if not SMTP_USER or not SMTP_PASSWORD:
         return False, "SMTP credentials missing"
-
-    sender = _sender_email()
+    sender = EMAIL_FROM or SMTP_USER
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"LinktoCompany <{sender}>"
     msg["To"] = to_email
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain="linktocompany.app")
+    msg["Message-ID"] = make_msgid(domain="linktocompany.com")
     msg.attach(MIMEText(html_content, "html", "utf-8"))
-
     context = ssl.create_default_context()
-    smtp_timeout = 5
-
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=smtp_timeout) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=6) as server:
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(sender, [to_email], msg.as_string())
-            print(f"[SMTP 587 SUCCESS] Email sent to {to_email}")
             return True, "Delivered via Gmail SMTP"
     except Exception as e587:
-        print(f"[SMTP 587 FAIL] {e587}")
         try:
-            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=smtp_timeout) as server_ssl:
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=6) as server_ssl:
                 server_ssl.ehlo()
                 server_ssl.login(SMTP_USER, SMTP_PASSWORD)
                 server_ssl.sendmail(sender, [to_email], msg.as_string())
-                print(f"[SMTP 465 SUCCESS] Email sent to {to_email}")
                 return True, "Delivered via Gmail SSL"
         except Exception as e465:
-            print(f"[SMTP 465 FAIL] {e465}")
             return False, f"Gmail SMTP error: {e587}"
-
 
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     errors = []
-
-    # 1. HTTPS Providers (Uses Port 443 - 100% Allowed on Render Cloud)
-    providers = [
-        ("resend", RESEND_API_KEY, send_email_via_resend),
-        ("brevo", BREVO_API_KEY, send_email_via_brevo),
-        ("sendgrid", SENDGRID_API_KEY, send_email_via_sendgrid),
-        ("webhook", EMAIL_HTTPS_WEBHOOK, send_email_via_webhook),
-    ]
-    for name, enabled, fn in providers:
-        if not enabled:
-            continue
-        ok, msg = fn(to_email, subject, html_content)
-        if ok:
-            return True, msg
-        errors.append(f"{name}: {msg}")
-
-    # 2. SMTP (Works locally, but blocked on Render Free cloud tier)
+    # 1. Webhook (Google Apps Script)
+    if EMAIL_HTTPS_WEBHOOK:
+        ok, msg = send_email_via_webhook(to_email, subject, html_content)
+        if ok: return True, msg
+        errors.append(f"webhook: {msg}")
+    # 2. Resend API
+    if RESEND_API_KEY:
+        ok, msg = send_email_via_resend(to_email, subject, html_content)
+        if ok: return True, msg
+        errors.append(f"resend: {msg}")
+    # 3. Direct SMTP
     if SMTP_USER and SMTP_PASSWORD:
         ok, msg = send_email_via_smtp(to_email, subject, html_content)
-        if ok:
-            return True, msg
+        if ok: return True, msg
         errors.append(f"smtp: {msg}")
 
-    print(f"[EMAIL FAIL] To: {to_email} | {' | '.join(errors) or 'no email provider configured'}")
-    err_detail = " | ".join(errors) if errors else "Email delivery failed. Please check SMTP/API configuration."
-    return False, err_detail
+    return False, " | ".join(errors) if errors else "Email could not be delivered"
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
@@ -328,7 +202,7 @@ def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tup
         <div style="text-align: center; margin-bottom: 25px;">
           <div style="display: inline-block; width: 44px; height: 44px; background: #2563eb; color: #ffffff; font-weight: 900; font-size: 22px; line-height: 44px; border-radius: 8px; margin-bottom: 8px;">L</div>
           <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">LinktoCompany</h1>
-          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Skill Proof Network · SIH 2026</p>
+          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Skill Proof Network</p>
         </div>
         
         <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
@@ -390,42 +264,63 @@ def get_current_user(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="User not found")
     return dict(row)
 
-# ----------------- Question Bank & Static Data -----------------
+# ----------------- Comprehensive Question Bank -----------------
 QUESTION_BANK = {
     "JavaScript": [
         {"id": 0, "q": "Promises are resolved with?", "opts": [".then", ".catch", ".resolve", ".await"], "ans": 0},
         {"id": 1, "q": "Which is falsy?", "opts": ["'0'", "0", "'false'", "[]"], "ans": 1},
         {"id": 2, "q": "typeof null returns?", "opts": ["null", "undefined", "object", "number"], "ans": 2},
-        {"id": 3, "q": "Which method mutates the array?", "opts": ["map", "filter", "slice", "push"], "ans": 3},
+        {"id": 3, "q": "Which method mutates the original array?", "opts": ["map", "filter", "slice", "push"], "ans": 3},
         {"id": 4, "q": "Which keyword declares a block-scoped variable?", "opts": ["var", "let", "func", "def"], "ans": 1},
     ],
     "React": [
         {"id": 0, "q": "JSX compiles to?", "opts": ["HTML", "React.createElement calls", "Vue nodes", "Web Components"], "ans": 1},
-        {"id": 1, "q": "Key prop is used for?", "opts": ["Styling", "Reconciliation", "Routing", "Testing"], "ans": 1},
+        {"id": 1, "q": "Key prop in lists is used for?", "opts": ["Styling", "Reconciliation & Diffing", "Routing", "Testing"], "ans": 1},
         {"id": 2, "q": "Effect runs after render with?", "opts": ["useMemo", "useState", "useEffect", "useCallback"], "ans": 2},
-        {"id": 3, "q": "Which hook manages state?", "opts": ["useEffect", "useState", "useMemo", "useRef"], "ans": 1},
-        {"id": 4, "q": "Prop drilling is solved by?", "opts": ["Context", "Refs", "Reducers only", "Portals"], "ans": 0},
+        {"id": 3, "q": "Which hook manages local component state?", "opts": ["useEffect", "useState", "useMemo", "useRef"], "ans": 1},
+        {"id": 4, "q": "Prop drilling across deep trees is cleanly solved by?", "opts": ["Context API", "Refs", "Reducers only", "Portals"], "ans": 0},
     ],
     "Node.js": [
-        {"id": 0, "q": "Async function returns?", "opts": ["Callback", "Promise", "Generator", "Iterator"], "ans": 1},
-        {"id": 1, "q": "Which module handles HTTP?", "opts": ["fs", "http", "path", "os"], "ans": 1},
-        {"id": 2, "q": "Node.js is built on?", "opts": ["Spider Monkey", "V8", "Chakra", "Nashorn"], "ans": 1},
-        {"id": 3, "q": "Event loop enables?", "opts": ["Threads", "Non-blocking IO", "GPU calls", "Static typing"], "ans": 1},
-        {"id": 4, "q": "package.json field for entry file?", "opts": ["start", "main", "index", "root"], "ans": 1},
+        {"id": 0, "q": "Async function always returns a?", "opts": ["Callback", "Promise", "Generator", "Iterator"], "ans": 1},
+        {"id": 1, "q": "Which built-in module creates HTTP servers?", "opts": ["fs", "http", "path", "os"], "ans": 1},
+        {"id": 2, "q": "Node.js JavaScript engine is?", "opts": ["Spider Monkey", "Google V8", "Chakra", "Nashorn"], "ans": 1},
+        {"id": 3, "q": "Event loop enables which core capability?", "opts": ["Multithreaded CPU computing", "Non-blocking Asynchronous I/O", "GPU calls", "Static typing"], "ans": 1},
+        {"id": 4, "q": "package.json entry file configuration field is?", "opts": ["start", "main", "index", "root"], "ans": 1},
     ],
-    "MongoDB": [
-        {"id": 0, "q": "Primary key field?", "opts": ["id", "_id", "pk", "uuid"], "ans": 1},
-        {"id": 1, "q": "MongoDB stores data as?", "opts": ["Rows", "BSON documents", "XML", "CSV"], "ans": 1},
-        {"id": 2, "q": "Indexes improve?", "opts": ["Writes", "Query speed", "Storage size", "Locking"], "ans": 1},
-        {"id": 3, "q": "Group of documents?", "opts": ["Table", "Collection", "Schema", "Index"], "ans": 1},
-        {"id": 4, "q": "Which stage filters in aggregation?", "opts": ["$match", "$group", "$sort", "$project"], "ans": 0},
+    "DSA": [
+        {"id": 0, "q": "Time complexity to search in a balanced Binary Search Tree (BST)?", "opts": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "ans": 1},
+        {"id": 1, "q": "Which data structure follows LIFO (Last-In First-Out)?", "opts": ["Queue", "Stack", "Array", "Linked List"], "ans": 1},
+        {"id": 2, "q": "Average time complexity of HashMap lookup?", "opts": ["O(1)", "O(log n)", "O(n)", "O(n^2)"], "ans": 0},
+        {"id": 3, "q": "Which algorithm is used to find shortest path in weighted graph without negative cycles?", "opts": ["Kruskal", "Dijkstra", "DFS", "Binary Search"], "ans": 1},
+        {"id": 4, "q": "Dynamic Programming is primarily used when problem exhibits?", "opts": ["Random outcomes", "Overlapping Subproblems & Optimal Substructure", "Greedy choice only", "Infinite recursion"], "ans": 1},
+    ],
+    "SQL & Databases": [
+        {"id": 0, "q": "Which SQL command retrieves all records matching both tables?", "opts": ["LEFT JOIN", "INNER JOIN", "FULL JOIN", "CROSS JOIN"], "ans": 1},
+        {"id": 1, "q": "Database Indexes primarily improve which operation?", "opts": ["INSERT speed", "SELECT query speed", "Storage compactness", "Table locking"], "ans": 1},
+        {"id": 2, "q": "In ACID properties of transactions, 'A' stands for?", "opts": ["Accuracy", "Atomicity", "Availability", "Allocation"], "ans": 1},
+        {"id": 3, "q": "Process of organizing data to reduce redundancy is called?", "opts": ["Indexing", "Normalization", "Denormalization", "Sharding"], "ans": 1},
+        {"id": 4, "q": "Primary key constraint ensures columns are?", "opts": ["Nullable", "Unique and NOT NULL", "Foreign referenced", "Auto-incremented only"], "ans": 1},
+    ],
+    "CS Fundamentals": [
+        {"id": 0, "q": "Which OOP principle hides internal details and exposes only necessary interfaces?", "opts": ["Inheritance", "Encapsulation / Abstraction", "Polymorphism", "Compilation"], "ans": 1},
+        {"id": 1, "q": "Condition where processes are waiting indefinitely for resources held by each other?", "opts": ["Starvation", "Deadlock", "Context Switch", "Paging"], "ans": 1},
+        {"id": 2, "q": "TCP protocol operates at which OSI layer?", "opts": ["Network", "Transport", "Application", "Data Link"], "ans": 1},
+        {"id": 3, "q": "Virtual Memory is managed primarily through?", "opts": ["Paging and Segmentation", "Thread pooling", "DNS lookup", "Socket binding"], "ans": 0},
+        {"id": 4, "q": "HTTP status code 401 indicates?", "opts": ["Not Found", "Unauthorized Authentication", "Forbidden Access", "Internal Server Error"], "ans": 1},
+    ],
+    "Git & DevOps": [
+        {"id": 0, "q": "Command to create and switch to a new Git branch?", "opts": ["git branch", "git checkout -b <name>", "git merge", "git push"], "ans": 1},
+        {"id": 1, "q": "Which tool packages application code with its dependencies into isolated containers?", "opts": ["Postman", "Docker", "Git", "Webpack"], "ans": 1},
+        {"id": 2, "q": "Command used to download existing remote repository code locally?", "opts": ["git fetch", "git clone", "git init", "git commit"], "ans": 1},
+        {"id": 3, "q": "Pull Request (PR) in GitHub is used to?", "opts": ["Delete branch", "Propose code changes for review and merge", "Clone repo", "Revert local commit"], "ans": 1},
+        {"id": 4, "q": "Standard port for secure HTTPS traffic is?", "opts": ["80", "443", "22", "8080"], "ans": 1},
     ],
     "Python": [
-        {"id": 0, "q": "async keyword requires?", "opts": ["await", "yield", "return", "raise"], "ans": 0},
-        {"id": 1, "q": "PEP for style guide?", "opts": ["PEP 8", "PEP 20", "PEP 484", "PEP 257"], "ans": 0},
-        {"id": 2, "q": "Comprehension for dict uses?", "opts": ["()", "[]", "{}", "<>"], "ans": 2},
-        {"id": 3, "q": "Which is mutable?", "opts": ["tuple", "str", "list", "int"], "ans": 2},
-        {"id": 4, "q": "GIL stands for?", "opts": ["Global Import Loader", "Global Interpreter Lock", "General Iter Loop", "Grouped Instance List"], "ans": 1},
+        {"id": 0, "q": "async keyword in Python requires which keyword to call coroutines?", "opts": ["await", "yield", "return", "raise"], "ans": 0},
+        {"id": 1, "q": "PEP standard for Python style guide is?", "opts": ["PEP 8", "PEP 20", "PEP 484", "PEP 257"], "ans": 0},
+        {"id": 2, "q": "Dictionary comprehension in Python uses brackets?", "opts": ["()", "[]", "{}", "<>"], "ans": 2},
+        {"id": 3, "q": "Which Python data type is mutable?", "opts": ["tuple", "str", "list", "int"], "ans": 2},
+        {"id": 4, "q": "GIL in Python runtime stands for?", "opts": ["Global Import Loader", "Global Interpreter Lock", "General Iter Loop", "Grouped Instance List"], "ans": 1},
     ],
 }
 
@@ -495,6 +390,49 @@ def init_db():
     )
     """)
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_progress (
+        user_id TEXT PRIMARY KEY,
+        goal_track TEXT NOT NULL,
+        completed_topics TEXT DEFAULT '[]',
+        updated_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS interviews (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        student_email TEXT NOT NULL,
+        company_id TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        role_title TEXT NOT NULL,
+        date_time TEXT NOT NULL,
+        meet_link TEXT NOT NULL,
+        notes TEXT DEFAULT '',
+        status TEXT DEFAULT 'Scheduled',
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS endorsements (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_role TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS copilot_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
@@ -510,7 +448,7 @@ def init_db():
     cursor.execute("SELECT COUNT(*) as cnt FROM challenges")
     if cursor.fetchone()["cnt"] == 0:
         seed_challs = [
-            ("f2cd59d6-9903-4be9-b9d9-71bca714805a", "Build a Student Management API", "TechVedika", "Backend", "Design a REST API for managing students with auth, pagination, and search.", 2, datetime.now(timezone.utc).isoformat(), "seed"),
+            ("f2cd59d6-9903-4be9-b9d9-71bca714805a", "Build a Student Management API", "TechVedika", "Backend", "Design a REST API for managing students with JWT auth, pagination, and search.", 2, datetime.now(timezone.utc).isoformat(), "seed"),
             ("a13f95fc-b88f-45d6-bd5c-e4c13b2ed938", "Responsive Dashboard from JSON API", "Innovex Labs", "Frontend", "Build a responsive dashboard consuming a JSON API within 3 hours.", 5, datetime.now(timezone.utc).isoformat(), "seed"),
             ("93ac0503-9046-4014-bd5a-28635a9a95b6", "Redesign a Checkout Flow", "PixelForge", "UI/UX", "Improve the checkout UX and submit a Figma prototype with rationale.", 7, datetime.now(timezone.utc).isoformat(), "seed"),
         ]
@@ -536,6 +474,23 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class UpdateProgressRequest(BaseModel):
+    goal_track: str
+    completed_topics: List[str]
+
+class ScheduleInterviewRequest(BaseModel):
+    student_id: str
+    student_name: str
+    student_email: str
+    role_title: str
+    date_time: str
+    meet_link: str
+    notes: Optional[str] = ""
+
+class CreateEndorsementRequest(BaseModel):
+    student_id: str
+    message: str
 
 class StartAssessmentRequest(BaseModel):
     skill: str
@@ -566,7 +521,6 @@ class CopilotChatRequest(BaseModel):
 @app.post("/api/auth/send-otp")
 def send_otp(req: SendOtpRequest):
     email = validate_real_email(req.email)
-
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
@@ -587,7 +541,6 @@ def send_otp(req: SendOtpRequest):
     conn.close()
 
     sent, msg = send_otp_email(email, otp, req.name or "Candidate")
-    
     return {
         "success": True,
         "message": f"Verification code generated for {email}",
@@ -598,14 +551,11 @@ def send_otp(req: SendOtpRequest):
 @app.post("/api/auth/register")
 def register(req: RegisterRequest):
     email = validate_real_email(req.email)
-    
     if not req.otp or len(req.otp.strip()) != 6:
         raise HTTPException(status_code=400, detail="A valid 6-digit email OTP is mandatory to verify your account.")
 
     conn = get_db()
     cursor = conn.cursor()
-
-    # Strictly verify OTP against database
     cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
     otp_row = cursor.fetchone()
     if not otp_row or otp_row["otp"] != req.otp.strip():
@@ -627,7 +577,15 @@ def register(req: RegisterRequest):
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", (user_id, req.name.strip(), email, pw_hash, req.role, now))
     
-    # Delete consumed OTP
+    # Initialize 0% Progress for New Registered User
+    cursor.execute("INSERT INTO user_progress VALUES (?, ?, ?, ?)", (user_id, "Full Stack Software Engineer", json.dumps([]), now))
+
+    # Send Welcome Notification
+    cursor.execute("INSERT INTO notifications VALUES (?, ?, ?, ?, ?)", (
+        str(uuid.uuid4()), user_id, "Welcome to LinktoCompany!",
+        "Your profile starts at 0% Skill Readiness. Take assessments and complete roadmap milestones to get recruiter shortlists!",
+        now
+    ))
     cursor.execute("DELETE FROM email_otps WHERE email = ?", (email,))
     conn.commit()
     conn.close()
@@ -670,6 +628,182 @@ def login(req: LoginRequest):
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(get_current_user)):
     return {"user": user}
+
+# ----------------- Dynamic Dashboard & Goal Roadmap Endpoints -----------------
+@app.get("/api/dashboard/stats")
+def get_dashboard_stats(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. Fetch Attempts
+    cursor.execute("SELECT * FROM attempts WHERE user_id = ? ORDER BY score DESC", (user["id"],))
+    attempts = cursor.fetchall()
+    passed_attempts = [dict(a) for a in attempts if a["passed"] == 1]
+
+    # 2. Fetch Submissions
+    cursor.execute("SELECT * FROM submissions WHERE user_id = ? ORDER BY score DESC", (user["id"],))
+    submissions = [dict(s) for s in cursor.fetchall()]
+
+    # 3. Fetch User Progress
+    cursor.execute("SELECT * FROM user_progress WHERE user_id = ?", (user["id"],))
+    prog = cursor.fetchone()
+    goal_track = prog["goal_track"] if prog else "Full Stack Software Engineer"
+    completed_topics = json.loads(prog["completed_topics"]) if prog and prog["completed_topics"] else []
+
+    # 4. Fetch Scheduled Interviews
+    cursor.execute("SELECT * FROM interviews WHERE student_id = ? ORDER BY created_at DESC", (user["id"],))
+    interviews = [dict(i) for i in cursor.fetchall()]
+
+    # 5. Fetch Endorsements
+    cursor.execute("SELECT * FROM endorsements WHERE student_id = ? ORDER BY created_at DESC", (user["id"],))
+    endorsements = [dict(e) for e in cursor.fetchall()]
+
+    # 6. Fetch Notifications
+    cursor.execute("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10", (user["id"],))
+    notifications = [dict(n) for n in cursor.fetchall()]
+
+    conn.close()
+
+    # REAL DYNAMIC PROGRESS CALCULATION (Starts at 0% for new user)
+    verified_count = len(passed_attempts)
+    challenges_count = len(submissions)
+    interviews_count = len(interviews)
+    topics_count = len(completed_topics)
+
+    # Dynamic Trust Score: Starts at 15 for email verified; +15 per passed quiz; +20 per challenge
+    if verified_count == 0 and challenges_count == 0:
+        trust_score = 15  # Base for email verified
+    else:
+        trust_score = min(100, 15 + (verified_count * 15) + (challenges_count * 20))
+
+    # Dynamic Skill Readiness: (topics * 3.5%) + (verified_skills * 10%) + (challenges * 12%), max 100%
+    skill_readiness = min(100, int((topics_count * 3.5) + (verified_count * 10) + (challenges_count * 12)))
+
+    # Top Skill
+    top_skill = None
+    if passed_attempts:
+        top_skill = {
+            "name": passed_attempts[0]["skill"],
+            "score": passed_attempts[0]["score"]
+        }
+
+    return {
+        "trust_score": trust_score,
+        "skill_readiness": skill_readiness,
+        "verified_skills_count": verified_count,
+        "challenges_solved": challenges_count,
+        "interviews_count": interviews_count,
+        "top_skill": top_skill,
+        "verified_skills": [{"skill": a["skill"], "score": a["score"], "integrity": a["integrity_score"]} for a in passed_attempts],
+        "goal_track": goal_track,
+        "completed_topics": completed_topics,
+        "interviews": interviews,
+        "endorsements": endorsements,
+        "notifications": notifications
+    }
+
+@app.post("/api/dashboard/progress")
+def update_progress(req: UpdateProgressRequest, user: dict = Depends(get_current_user)):
+    conn = get_db()
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+    INSERT INTO user_progress (user_id, goal_track, completed_topics, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET goal_track = excluded.goal_track, completed_topics = excluded.completed_topics, updated_at = excluded.updated_at
+    """, (user["id"], req.goal_track, json.dumps(req.completed_topics), now))
+    conn.commit()
+    conn.close()
+    return {"success": True, "goal_track": req.goal_track, "completed_topics": req.completed_topics}
+
+# ----------------- Recruiter / Teacher / Student Interaction Endpoints -----------------
+@app.get("/api/talents")
+def list_talents():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT u.id, u.name, u.email, u.role, u.created_at,
+           (SELECT COUNT(*) FROM attempts a WHERE a.user_id = u.id AND a.passed = 1) as verified_count,
+           (SELECT COUNT(*) FROM submissions s WHERE s.user_id = u.id) as challenge_count,
+           (SELECT AVG(score) FROM attempts a WHERE a.user_id = u.id AND a.passed = 1) as avg_score
+    FROM users u WHERE u.role = 'Student'
+    ORDER BY verified_count DESC, avg_score DESC
+    """)
+    rows = cursor.fetchall()
+    talents = []
+    for r in rows:
+        d = dict(r)
+        d["verified_count"] = d["verified_count"] or 0
+        d["challenge_count"] = d["challenge_count"] or 0
+        d["avg_score"] = int(d["avg_score"]) if d["avg_score"] else 0
+        d["trust_score"] = min(100, 15 + (d["verified_count"] * 15) + (d["challenge_count"] * 20))
+        talents.append(d)
+    conn.close()
+    return {"talents": talents}
+
+@app.post("/api/interviews/schedule")
+def schedule_interview(req: ScheduleInterviewRequest, user: dict = Depends(get_current_user)):
+    interview_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    company_name = user["name"] if user["role"] in ["Company", "Admin", "Faculty", "College"] else "Recruiter"
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO interviews (id, student_id, student_name, student_email, company_id, company_name, role_title, date_time, meet_link, notes, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Scheduled', ?)
+    """, (interview_id, req.student_id, req.student_name, req.student_email, user["id"], company_name, req.role_title, req.date_time, req.meet_link, req.notes or "", now))
+    
+    # Notify Student
+    cursor.execute("""
+    INSERT INTO notifications (id, user_id, title, message, created_at)
+    VALUES (?, ?, ?, ?, ?)
+    """, (
+        str(uuid.uuid4()), req.student_id,
+        f"🎯 Interview Scheduled with {company_name}!",
+        f"You have been invited for an interview for the role '{req.role_title}' on {req.date_time}. Meet Link: {req.meet_link}",
+        now
+    ))
+    conn.commit()
+    conn.close()
+
+    # Send Notification Email to Student
+    invite_html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px;">
+      <h2 style="color: #10b981;">🎯 Direct Interview Invitation: {req.role_title}</h2>
+      <p>Hello <strong>{req.student_name}</strong>,</p>
+      <p>Based on your verified skills on LinktoCompany, <strong>{company_name}</strong> has scheduled a direct technical interview with you!</p>
+      <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin: 15px 0;">
+        <p style="margin: 4px 0;"><strong>Date & Time:</strong> {req.date_time}</p>
+        <p style="margin: 4px 0;"><strong>Meeting Link:</strong> <a href="{req.meet_link}" style="color: #38bdf8;">{req.meet_link}</a></p>
+        {f'<p style="margin: 4px 0;"><strong>Notes:</strong> {req.notes}</p>' if req.notes else ''}
+      </div>
+      <p style="color: #94a3b8; font-size: 13px;">Login to your LinktoCompany dashboard to view full interview details.</p>
+    </div>
+    """
+    send_email(req.student_email, f"Interview Scheduled: {req.role_title} at {company_name}", invite_html)
+
+    return {"success": True, "interview_id": interview_id, "message": f"Interview scheduled and invitation sent to {req.student_email}"}
+
+@app.post("/api/endorsements")
+def create_endorsement(req: CreateEndorsementRequest, user: dict = Depends(get_current_user)):
+    end_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO endorsements (id, student_id, author_name, author_role, message, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (end_id, req.student_id, user["name"], user["role"], req.message, now))
+    
+    # Notify student
+    cursor.execute("""
+    INSERT INTO notifications (id, user_id, title, message, created_at)
+    VALUES (?, ?, ?, ?, ?)
+    """, (str(uuid.uuid4()), req.student_id, f"Feedback from {user['name']} ({user['role']})", req.message, now))
+    conn.commit()
+    conn.close()
+    return {"success": True, "endorsement_id": end_id}
 
 # ----------------- Assessment Endpoints -----------------
 @app.get("/api/assessments/skills")
@@ -737,6 +871,19 @@ def submit_assessment(req: SubmitAssessmentRequest, user: dict = Depends(get_cur
         "UPDATE attempts SET submitted = 1, passed = ?, score = ?, integrity_score = ?, integrity_events = ?, disqualified = ?, submitted_at = ? WHERE id = ?",
         (1 if passed else 0, score, integrity_score, json.dumps(req.integrity_events), 1 if disqualified else 0, now, req.attempt_id)
     )
+
+    # Trigger Automated Recruiter Notification when Student passes high score
+    if passed and score >= 80:
+        cursor.execute("""
+        INSERT INTO notifications (id, user_id, title, message, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """, (
+            str(uuid.uuid4()), user["id"],
+            f"🏆 Skill Verified: {skill} ({score}%)",
+            f"Congratulations! You verified {skill} with {score}% score. Companies can now shortlist you directly for interviews!",
+            now
+        ))
+
     conn.commit()
     conn.close()
 
@@ -871,39 +1018,36 @@ def get_leaderboard(challenge_id: str):
 def copilot_chat(req: CopilotChatRequest):
     msg = req.message.lower()
 
-    if "next" in msg or "learn" in msg:
+    if "dsa" in msg or "placement" in msg:
         reply = (
-            "Based on your verified skills and industry demand on LinktoCompany, here is your prioritized next step:\n\n"
-            "1. **Node.js & Express REST APIs**: Complete backend assessment to unlock full-stack matchmaking.\n"
-            "2. **MongoDB Data Modeling**: Complete our database challenge to gain a 'Challenge Proven' credential.\n"
-            "3. **JWT Authentication & Docker**: Integrate security and containerization into your portfolio project.\n\n"
-            "Taking the Node.js assessment today will raise your Skill Readiness from 62% to ~75%."
+            "Here is your prioritized DSA roadmap for placements (150–250 quality problems):\n\n"
+            "1. **Arrays & Strings + Two Pointers** (Sliding window, prefix sum)\n"
+            "2. **Linked List, Stack & Queue** (Monotonic stack, reverse list)\n"
+            "3. **HashMap & HashSet** (Frequency mapping, anagrams)\n"
+            "4. **Recursion & Backtracking** (Subsets, permutations)\n"
+            "5. **Trees & BST** (Traversals, LCA, height)\n"
+            "6. **Graph & BFS/DFS** (Dijkstra, Cycle detection)\n"
+            "7. **Dynamic Programming** (0/1 Knapsack, LCS, LIS)"
         )
-    elif "shortlist" in msg or "hired" in msg or "interview" in msg:
+    elif "next" in msg or "learn" in msg or "track" in msg:
         reply = (
-            "To trigger automated recruiter shortlists on LinktoCompany:\n\n"
-            "• **Score ≥ 90%** on company challenges for an automatic Fast-Track interview.\n"
-            "• **Score ≥ 85%** to qualify for direct internship placement.\n"
-            "• Maintain an **Integrity Score above 95%** across all proctored skill assessments.\n\n"
-            "Your highest match right now is the Frontend Internship at TechVedika (82% match)."
+            "Recommended Software Engineering milestones:\n\n"
+            "• **Core Track**: Full Stack (React + Node.js) or Java Backend (Spring Boot + JPA)\n"
+            "• **Database**: SQL (PostgreSQL), Indexes, Transactions, Normalization\n"
+            "• **Version Control**: Git branches, pull requests, merge conflict resolution\n"
+            "• **Real Projects**: Build and deploy an Authentication + Email OTP system or Job Portal."
         )
-    elif "resume" in msg or "full stack" in msg:
+    elif "shortlist" in msg or "interview" in msg:
         reply = (
-            "For Full Stack Developer roles in 2026, companies prioritize proven execution over bullet points:\n\n"
-            "1. Link verified assessments (JavaScript, React) directly to your profile.\n"
-            "2. Add working GitHub repository URLs and live deployment links to challenge submissions.\n"
-            "3. Demonstrate API error handling, JWT auth, and database indexing in your project code."
-        )
-    elif "project" in msg or "portfolio" in msg:
-        reply = (
-            "We recommend attempting the **Build a Student Management API** challenge posted by TechVedika. "
-            "It tests REST endpoints, pagination, and token-based authentication—directly addressing your missing skills."
+            "To get automated recruiter interview calls on LinktoCompany:\n\n"
+            "1. Pass skill assessments with **≥ 80% score** (JavaScript, DSA, SQL, CS Fundamentals).\n"
+            "2. Submit at least 1 live company challenge with a working GitHub repository URL.\n"
+            "3. Companies will see your verified score card and schedule direct interviews via Google Meet."
         )
     else:
         reply = (
             f"Regarding your query on '{req.message}':\n\n"
-            "The LinktoCompany ecosystem connects verified student skills to real company hiring pipelines. "
-            "You can take timed assessments to verify your skills, solve live industry challenges, and earn automated interview shortlists."
+            "LinktoCompany connects verified skills to real recruiters. Complete roadmap topics, verify your skills with proctored quizzes, and earn direct interview invites!"
         )
 
     now = datetime.now(timezone.utc).isoformat()

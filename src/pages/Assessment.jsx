@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { assessmentApi } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { AlertTriangle, ShieldCheck, Clock, Loader2 } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 
 const Assessment = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [skills, setSkills] = useState([]);
   const [attempt, setAttempt] = useState(null);
@@ -20,8 +21,15 @@ const Assessment = () => {
   const terminatedRef = useRef(false);
 
   useEffect(() => {
-    assessmentApi.skills().then((r) => setSkills(r.skills)).catch(() => {});
-  }, []);
+    assessmentApi.skills().then((r) => {
+      setSkills(r.skills);
+      const params = new URLSearchParams(location.search);
+      const targetSkill = params.get('skill');
+      if (targetSkill && r.skills.includes(targetSkill)) {
+        startAssessment(targetSkill);
+      }
+    }).catch(() => {});
+  }, [location.search]);
 
   // Timer
   useEffect(() => {

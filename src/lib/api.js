@@ -12,10 +12,18 @@ api.interceptors.request.use((config) => {
 });
 
 export const authApi = {
-  sendOtp: (email, name) => api.post('/auth/send-otp', { email, name }, { timeout: 25000 }).then((r) => r.data),
+  sendOtp: (email, name) => api.post('/auth/send-otp', { email, name }).then((r) => r.data),
   register: (data) => api.post('/auth/register', data).then((r) => r.data),
   login: (data) => api.post('/auth/login', data).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
+};
+
+export const dashboardApi = {
+  stats: () => api.get('/dashboard/stats').then((r) => r.data),
+  updateProgress: (data) => api.post('/dashboard/progress', data).then((r) => r.data),
+  listTalents: () => api.get('/talents').then((r) => r.data),
+  scheduleInterview: (data) => api.post('/interviews/schedule', data).then((r) => r.data),
+  addEndorsement: (data) => api.post('/endorsements', data).then((r) => r.data),
 };
 
 export const assessmentApi = {
