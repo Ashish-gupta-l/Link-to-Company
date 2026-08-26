@@ -231,10 +231,6 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
     if not SMTP_USER or not SMTP_PASSWORD:
         return False, "SMTP credentials missing"
 
-    # Render free instances block 25/465/587 — skip to avoid a long hang.
-    if ON_RENDER and os.environ.get("SMTP_FORCE", "").lower() not in ("true", "1"):
-        return False, "SMTP skipped on Render (outbound ports 465/587 are blocked on free web services)"
-
     sender = _sender_email()
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -273,7 +269,14 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     errors = []
 
-    # HTTPS first — these use port 443, which Render allows.
+    # 1. Direct Gmail SMTP (Verified & Working)
+    if SMTP_USER and SMTP_PASSWORD:
+        ok, msg = send_email_via_smtp(to_email, subject, html_content)
+        if ok:
+            return True, msg
+        errors.append(f"smtp: {msg}")
+
+    # 2. HTTPS Providers (Resend, Brevo, SendGrid, Webhook)
     providers = [
         ("resend", RESEND_API_KEY, send_email_via_resend),
         ("brevo", BREVO_API_KEY, send_email_via_brevo),
@@ -288,21 +291,9 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
             return True, msg
         errors.append(f"{name}: {msg}")
 
-    if SMTP_USER and SMTP_PASSWORD:
-        ok, msg = send_email_via_smtp(to_email, subject, html_content)
-        if ok:
-            return True, msg
-        errors.append(f"smtp: {msg}")
-
     print(f"[EMAIL FAIL] To: {to_email} | {' | '.join(errors) or 'no email provider configured'}")
-    hint = (
-        "OTP email could not be delivered from Render. Gmail SMTP is blocked on the free plan. "
-        "Use your existing Gmail via Google Apps Script: deploy backend/gmail_https_relay.gs "
-        "and set EMAIL_HTTPS_WEBHOOK plus EMAIL_WEBHOOK_SECRET on Render."
-    )
-    if errors:
-        return False, hint
-    return False, hint
+    err_detail = " | ".join(errors) if errors else "Email delivery failed. Please check SMTP/API configuration."
+    return False, err_detail
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
