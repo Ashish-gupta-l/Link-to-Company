@@ -1,6 +1,7 @@
 import os
 import re
 import ssl
+import html as html_lib
 import time
 import uuid
 import json
@@ -9,6 +10,7 @@ import hashlib
 import random
 import smtplib
 import urllib.request
+import urllib.error
 import urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -28,12 +30,22 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
 # Email API / SMTP Configuration
+# Render free web services block outbound SMTP (25/465/587). Use HTTPS APIs first.
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER or "").strip()
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "").strip()
+EMAIL_HTTPS_WEBHOOK = os.environ.get("EMAIL_HTTPS_WEBHOOK", "").strip()
+EMAIL_WEBHOOK_SECRET = os.environ.get("EMAIL_WEBHOOK_SECRET", "").strip()
+ON_RENDER = os.environ.get("RENDER", "").lower() in ("true", "1")
+CONSUMER_MAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "outlook.com",
+    "hotmail.com", "live.com", "icloud.com", "me.com",
+}
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "linktocompany.db")
 
@@ -66,24 +78,177 @@ app.add_middleware(
 )
 
 # ----------------- Automated Multi-Tier Email Service -----------------
+class _KeepPostRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Google Apps Script web apps 302 and drop POST bodies unless we preserve them."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if code not in (301, 302, 303, 307, 308):
+            return None
+        return urllib.request.Request(
+            newurl,
+            data=req.data,
+            headers=dict(req.header_items()),
+            method="POST",
+        )
+
+
+def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 15, follow_post_redirect: bool = False) -> Tuple[bool, str, int]:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        if follow_post_redirect:
+            opener = urllib.request.build_opener(_KeepPostRedirectHandler)
+            with opener.open(req, timeout=timeout) as res:
+                raw = res.read().decode("utf-8", errors="replace") or "ok"
+                return True, raw, getattr(res, "status", 200) or 200
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            raw = res.read().decode("utf-8", errors="replace") or "ok"
+            return True, raw, getattr(res, "status", 200) or 200
+    except urllib.error.HTTPError as he:
+        err = he.read().decode("utf-8", errors="replace")
+        return False, err, he.code
+    except Exception as e:
+        return False, str(e), 0
+
+
+def _sender_email() -> str:
+    return EMAIL_FROM or SMTP_USER or ""
+
+
+def _resend_from() -> str:
+    sender = _sender_email()
+    if sender and "@" in sender:
+        domain = sender.split("@")[-1].lower()
+        if domain not in CONSUMER_MAIL_DOMAINS:
+            return f"LinktoCompany <{sender}>"
+    return "LinktoCompany <onboarding@resend.dev>"
+
+
+def send_email_via_resend(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    if not RESEND_API_KEY:
+        return False, "Resend API key missing"
+    reply_to = _sender_email() or None
+    payload = {
+        "from": _resend_from(),
+        "to": [to_email],
+        "subject": subject,
+        "html": html_content,
+    }
+    if reply_to and "@" in reply_to:
+        payload["reply_to"] = reply_to
+    ok, body, code = _http_post_json(
+        "https://api.resend.com/emails",
+        payload,
+        {
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "LinktoCompany-SIH/1.0",
+        },
+    )
+    if ok:
+        print(f"[RESEND SUCCESS] Sent to {to_email}: {body}")
+        return True, "Delivered via Resend"
+    print(f"[RESEND HTTP ERROR {code}] {body}")
+    return False, f"Resend error {code}: {body[:300]}"
+
+
+def send_email_via_brevo(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    if not BREVO_API_KEY:
+        return False, "Brevo API key missing"
+    sender = _sender_email()
+    if not sender or "@" not in sender:
+        return False, "EMAIL_FROM / SMTP_USER required for Brevo"
+    ok, body, code = _http_post_json(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+            "sender": {"name": "LinktoCompany", "email": sender},
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "htmlContent": html_content,
+        },
+        {
+            "api-key": BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    if ok:
+        print(f"[BREVO SUCCESS] Sent to {to_email}: {body}")
+        return True, "Delivered via Brevo"
+    print(f"[BREVO HTTP ERROR {code}] {body}")
+    return False, f"Brevo error {code}: {body[:300]}"
+
+
+def send_email_via_sendgrid(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    if not SENDGRID_API_KEY:
+        return False, "SendGrid API key missing"
+    sender = _sender_email()
+    if not sender or "@" not in sender:
+        return False, "EMAIL_FROM / SMTP_USER required for SendGrid"
+    ok, body, code = _http_post_json(
+        "https://api.sendgrid.com/v3/mail/send",
+        {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": sender, "name": "LinktoCompany"},
+            "subject": subject,
+            "content": [{"type": "text/html", "value": html_content}],
+        },
+        {
+            "Authorization": f"Bearer {SENDGRID_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+    if ok or code in (200, 202):
+        print(f"[SENDGRID SUCCESS] Sent to {to_email}")
+        return True, "Delivered via SendGrid"
+    print(f"[SENDGRID HTTP ERROR {code}] {body}")
+    return False, f"SendGrid error {code}: {body[:300]}"
+
+
+def send_email_via_webhook(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
+    if not EMAIL_HTTPS_WEBHOOK:
+        return False, "EMAIL_HTTPS_WEBHOOK missing"
+    ok, body, code = _http_post_json(
+        EMAIL_HTTPS_WEBHOOK,
+        {
+            "to": to_email,
+            "subject": subject,
+            "html": html_content,
+            "secret": EMAIL_WEBHOOK_SECRET,
+        },
+        {"Content-Type": "application/json"},
+        timeout=20,
+        follow_post_redirect=True,
+    )
+    if ok:
+        print(f"[WEBHOOK SUCCESS] Sent to {to_email}: {body}")
+        return True, "Delivered via HTTPS email webhook"
+    print(f"[WEBHOOK HTTP ERROR {code}] {body}")
+    return False, f"Webhook error {code}: {body[:300]}"
+
+
 def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
     if not SMTP_USER or not SMTP_PASSWORD:
         return False, "SMTP credentials missing"
 
-    sender = EMAIL_FROM or SMTP_USER
+    # Render free instances block 25/465/587 — skip to avoid a long hang.
+    if ON_RENDER and os.environ.get("SMTP_FORCE", "").lower() not in ("true", "1"):
+        return False, "SMTP skipped on Render (outbound ports 465/587 are blocked on free web services)"
+
+    sender = _sender_email()
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"LinktoCompany <{sender}>"
     msg["To"] = to_email
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain="linktocompany.com")
+    msg["Message-ID"] = make_msgid(domain="linktocompany.app")
     msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     context = ssl.create_default_context()
-    
-    # Try Port 587
+    smtp_timeout = 5
+
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=smtp_timeout) as server:
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
@@ -93,9 +258,8 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
             return True, "Delivered via Gmail SMTP"
     except Exception as e587:
         print(f"[SMTP 587 FAIL] {e587}")
-        # Try Port 465 SSL
         try:
-            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=12) as server_ssl:
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=smtp_timeout) as server_ssl:
                 server_ssl.ehlo()
                 server_ssl.login(SMTP_USER, SMTP_PASSWORD)
                 server_ssl.sendmail(sender, [to_email], msg.as_string())
@@ -103,51 +267,46 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
                 return True, "Delivered via Gmail SSL"
         except Exception as e465:
             print(f"[SMTP 465 FAIL] {e465}")
-            return False, f"Gmail SMTP Auth Error: {e587}"
+            return False, f"Gmail SMTP error: {e587}"
+
 
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    # 1. Prioritize Direct Gmail SMTP if configured (Verified & Working)
+    errors = []
+
+    # HTTPS first — these use port 443, which Render allows.
+    providers = [
+        ("resend", RESEND_API_KEY, send_email_via_resend),
+        ("brevo", BREVO_API_KEY, send_email_via_brevo),
+        ("sendgrid", SENDGRID_API_KEY, send_email_via_sendgrid),
+        ("webhook", EMAIL_HTTPS_WEBHOOK, send_email_via_webhook),
+    ]
+    for name, enabled, fn in providers:
+        if not enabled:
+            continue
+        ok, msg = fn(to_email, subject, html_content)
+        if ok:
+            return True, msg
+        errors.append(f"{name}: {msg}")
+
     if SMTP_USER and SMTP_PASSWORD:
         ok, msg = send_email_via_smtp(to_email, subject, html_content)
         if ok:
             return True, msg
-        print(f"[SMTP FAILED, TRYING RESEND] {msg}")
+        errors.append(f"smtp: {msg}")
 
-    # 2. Resend HTTP API Fallback
-    if RESEND_API_KEY:
-        try:
-            sender = EMAIL_FROM if ("@" in EMAIL_FROM and not "gmail" in EMAIL_FROM) else "LinktoCompany <onboarding@resend.dev>"
-            payload = json.dumps({
-                "from": sender,
-                "to": [to_email],
-                "subject": subject,
-                "html": html_content
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json",
-                    "User-Agent": "LinktoCompany-SIH/1.0"
-                },
-                data=payload,
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=12) as res:
-                body = res.read().decode("utf-8")
-                print(f"[RESEND SUCCESS] Sent to {to_email}: {body}")
-                return True, "Delivered via Resend"
-        except urllib.error.HTTPError as he:
-            err_body = he.read().decode("utf-8")
-            print(f"[RESEND HTTP ERROR {he.code}] {err_body}")
-        except Exception as e:
-            print(f"[RESEND ERROR] {e}")
-
-    print(f"[EMAIL MOCK FALLBACK] To: {to_email} | Subject: {subject}")
-    return False, "Email sending failed. Please check server logs."
+    print(f"[EMAIL FAIL] To: {to_email} | {' | '.join(errors) or 'no email provider configured'}")
+    hint = (
+        "OTP email could not be delivered from Render. Gmail SMTP is blocked on Render's free plan. "
+        "Add a BREVO_API_KEY (recommended: verify your Gmail as sender at brevo.com) "
+        "or verify a domain on Resend so mail can be sent to any inbox."
+    )
+    if errors:
+        return False, hint
+    return False, hint
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"
+    safe_name = html_lib.escape((user_name or "Candidate").strip() or "Candidate")
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -161,7 +320,7 @@ def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tup
         </div>
         
         <div style="background: #050508; padding: 25px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
-          <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px 0;">Hello <strong>{user_name}</strong>,</p>
+          <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px 0;">Hello <strong>{safe_name}</strong>,</p>
           <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">Your 6-digit verification code to access LinktoCompany is:</p>
           
           <div style="font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #34d399; padding: 18px 0; background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; display: block; font-family: monospace;">
@@ -417,12 +576,12 @@ def send_otp(req: SendOtpRequest):
 
     sent, msg = send_otp_email(email, otp, req.name or "Candidate")
     
-    # We return success so the user can verify their email
     return {
         "success": True,
         "message": f"Verification code generated for {email}",
         "email_delivered": sent,
-        "delivery_status": msg
+        "delivery_status": msg,
+        "dev_otp": otp if not sent else None
     }
 
 @app.post("/api/auth/register")
