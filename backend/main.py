@@ -106,7 +106,14 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> Tuple
             return False, f"Gmail SMTP Auth Error: {e587}"
 
 def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, str]:
-    # Tier 1: Resend HTTP API (Super fast, 100% cloud deliverability, free)
+    # 1. Prioritize Direct Gmail SMTP if configured (Verified & Working)
+    if SMTP_USER and SMTP_PASSWORD:
+        ok, msg = send_email_via_smtp(to_email, subject, html_content)
+        if ok:
+            return True, msg
+        print(f"[SMTP FAILED, TRYING RESEND] {msg}")
+
+    # 2. Resend HTTP API Fallback
     if RESEND_API_KEY:
         try:
             sender = EMAIL_FROM if ("@" in EMAIL_FROM and not "gmail" in EMAIL_FROM) else "LinktoCompany <onboarding@resend.dev>"
@@ -133,19 +140,11 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
         except urllib.error.HTTPError as he:
             err_body = he.read().decode("utf-8")
             print(f"[RESEND HTTP ERROR {he.code}] {err_body}")
-            return False, f"Resend API Error: {err_body}"
         except Exception as e:
             print(f"[RESEND ERROR] {e}")
-            return False, f"Resend Error: {e}"
-
-    # Tier 2: Direct SMTP
-    if SMTP_USER and SMTP_PASSWORD:
-        ok, msg = send_email_via_smtp(to_email, subject, html_content)
-        if ok:
-            return True, msg
 
     print(f"[EMAIL MOCK FALLBACK] To: {to_email} | Subject: {subject}")
-    return False, "SMTP credentials invalid or not set"
+    return False, "Email sending failed. Please check server logs."
 
 def send_otp_email(to_email: str, otp: str, user_name: str = "Candidate") -> Tuple[bool, str]:
     subject = f"Your LinktoCompany Verification Code: {otp}"

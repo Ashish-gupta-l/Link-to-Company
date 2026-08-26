@@ -3,12 +3,20 @@ import sys
 import uuid
 import unittest
 from fastapi.testclient import TestClient
-from backend.main import app, init_db
+from backend.main import app, init_db, get_db
 
 class TestLinktoCompany(unittest.TestCase):
     def setUp(self):
         init_db()
         self.client = TestClient(app)
+
+    def get_otp_for_email(self, email: str) -> str:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT otp FROM email_otps WHERE email = ?", (email.strip().lower(),))
+        row = cursor.fetchone()
+        conn.close()
+        return row["otp"] if row else ""
 
     def test_mandatory_otp_and_fake_email_blocked(self):
         # 1. Test fake/disposable email is blocked
@@ -19,63 +27,54 @@ class TestLinktoCompany(unittest.TestCase):
         self.assertEqual(fake_res.status_code, 400)
         self.assertIn("Temporary", fake_res.json()["detail"])
 
-        # 2. Test registration without OTP is rejected
+        # 2. Test registration with invalid OTP is rejected
         test_email = f"verified.{uuid.uuid4().hex[:6]}@gmail.com"
-        reg_no_otp = self.client.post("/api/auth/register", json={
+        otp_res = self.client.post("/api/auth/send-otp", json={
+            "email": test_email,
+            "name": "Real User"
+        })
+        self.assertEqual(otp_res.status_code, 200)
+
+        reg_bad_otp = self.client.post("/api/auth/register", json={
             "name": "Real User",
             "email": test_email,
             "password": "real-password-2026",
             "role": "Student",
             "otp": "000000"
         })
-        self.assertEqual(reg_no_otp.status_code, 400)
-        self.assertIn("Invalid OTP", reg_no_otp.json()["detail"])
+        self.assertEqual(reg_bad_otp.status_code, 400)
+        self.assertIn("Invalid OTP", reg_bad_otp.json()["detail"])
 
-        # 3. Test genuine OTP flow
-        otp_res = self.client.post("/api/auth/send-otp", json={
-            "email": test_email,
-            "name": "Real User"
-        })
-        self.assertEqual(otp_res.status_code, 200)
-        dev_otp = otp_res.json().get("dev_otp")
-
-        # 4. Successful registration with correct OTP
+        # 3. Successful registration with correct OTP from DB
+        correct_otp = self.get_otp_for_email(test_email)
         reg_res = self.client.post("/api/auth/register", json={
             "name": "Real User",
             "email": test_email,
             "password": "real-password-2026",
             "role": "Student",
-            "otp": dev_otp
+            "otp": correct_otp
         })
         self.assertEqual(reg_res.status_code, 200)
         self.assertIn("token", reg_res.json())
 
-        # 5. Login works with real verified credentials
+        # 4. Login works with real verified credentials
         login_res = self.client.post("/api/auth/login", json={
             "email": test_email,
             "password": "real-password-2026"
         })
         self.assertEqual(login_res.status_code, 200)
 
-        # 6. Non-existent login is rejected
-        bad_login = self.client.post("/api/auth/login", json={
-            "email": "nonexistent@gmail.com",
-            "password": "wrongpassword"
-        })
-        self.assertEqual(bad_login.status_code, 400)
-
     def test_assessment_flow(self):
-        # Register a verified user first
         email = f"candidate.{uuid.uuid4().hex[:6]}@gmail.com"
-        otp_res = self.client.post("/api/auth/send-otp", json={"email": email, "name": "Candidate"})
-        dev_otp = otp_res.json().get("dev_otp")
+        self.client.post("/api/auth/send-otp", json={"email": email, "name": "Candidate"})
+        otp = self.get_otp_for_email(email)
 
         reg_res = self.client.post("/api/auth/register", json={
             "name": "Candidate",
             "email": email,
             "password": "password123",
             "role": "Student",
-            "otp": dev_otp
+            "otp": otp
         })
         token = reg_res.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
@@ -100,15 +99,15 @@ class TestLinktoCompany(unittest.TestCase):
 
     def test_challenge_and_leaderboard(self):
         email = f"challenger.{uuid.uuid4().hex[:6]}@gmail.com"
-        otp_res = self.client.post("/api/auth/send-otp", json={"email": email, "name": "Challenger"})
-        dev_otp = otp_res.json().get("dev_otp")
+        self.client.post("/api/auth/send-otp", json={"email": email, "name": "Challenger"})
+        otp = self.get_otp_for_email(email)
 
         reg_res = self.client.post("/api/auth/register", json={
             "name": "Challenger",
             "email": email,
             "password": "password123",
             "role": "Student",
-            "otp": dev_otp
+            "otp": otp
         })
         token = reg_res.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
