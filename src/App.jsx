@@ -28,7 +28,7 @@ const Shell = () => {
 
   return (
     <>
-      {!hideChrome && <Header />}
+      {!hideChrome && !inApp && <Header />}
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth" element={<Auth />} />
