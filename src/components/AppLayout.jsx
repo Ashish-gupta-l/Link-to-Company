@@ -4,7 +4,8 @@ import {
   Home, Globe, Briefcase, Laptop, Layers, FileText, Edit3,
   Calendar, Trophy, HelpCircle, MessageSquare, User, LogOut,
   PanelLeft, Flame, Bell, Sparkles, X, ChevronRight, BookOpen,
-  ShieldCheck, Zap, Star
+  ShieldCheck, Zap, Star, Users, PlusCircle, CheckCircle2, Building2,
+  GraduationCap, UserCheck
 } from 'lucide-react';
 import { getSession, clearSession } from '../lib/api';
 
@@ -15,6 +16,11 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  const role = user?.role || 'Student';
+  const isCompany = role === 'Company';
+  const isCollege = role === 'College' || role === 'Faculty';
+  const isStudent = !isCompany && !isCollege;
 
   const handleLogout = () => {
     clearSession();
@@ -76,22 +82,38 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
 
         {/* Right Action Icons & Badges */}
         <div className="flex items-center gap-3 md:gap-4">
-          {/* Company Wise Kit Pill Button */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('explore-sheets')}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer"
-          >
-            <span>Company Wise Kit</span>
-            <span className="text-amber-400">🌟</span>
-            <ChevronRight size={13} />
-          </button>
+          
+          {/* Student Specific: Company Wise Kit Shortcut */}
+          {isStudent && (
+            <button
+              type="button"
+              onClick={() => handleNavClick('explore-sheets')}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <span>Company Wise Kit</span>
+              <span className="text-amber-400">🌟</span>
+              <ChevronRight size={13} />
+            </button>
+          )}
 
-          {/* Streak Counter */}
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-mono font-bold">
-            <Flame size={14} className="fill-orange-400" />
-            <span>{stats?.completed_topics?.length > 0 ? '3' : '1'}</span>
-          </div>
+          {/* Company Specific: Post Challenge Shortcut */}
+          {isCompany && (
+            <Link
+              to="/challenges"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shadow-md shadow-blue-600/20"
+            >
+              <PlusCircle size={14} />
+              <span>Post Challenge</span>
+            </Link>
+          )}
+
+          {/* Student Streak Counter */}
+          {isStudent && (
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-mono font-bold">
+              <Flame size={14} className="fill-orange-400" />
+              <span>{stats?.completed_topics?.length > 0 ? '3' : '1'}</span>
+            </div>
+          )}
 
           {/* Notifications Dropdown */}
           <div className="relative">
@@ -110,7 +132,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               <div className="absolute right-0 mt-2 w-80 rounded-xl bg-[#0f121a] border border-white/10 shadow-2xl p-4 z-50">
                 <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-3">
                   <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Notifications</span>
-                  <span className="text-[10px] text-emerald-400 font-mono">Real-time</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Live</span>
                 </div>
                 <div className="space-y-2.5 max-h-64 overflow-y-auto">
                   {stats?.notifications?.length > 0 ? (
@@ -134,8 +156,11 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               {(user?.name || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="hidden lg:block text-left">
-              <div className="text-xs font-bold text-white leading-tight">{(user?.name || 'Student').split(' ')[0]}</div>
-              <div className="text-[10px] text-white/40 font-mono leading-tight">{user?.role || 'Student'}</div>
+              <div className="text-xs font-bold text-white leading-tight">{(user?.name || 'User').split(' ')[0]}</div>
+              <div className="text-[10px] text-white/40 font-mono leading-tight flex items-center gap-1">
+                <span>{role}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -144,7 +169,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
       {/* Main Container: Sidebar + Content */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* LEFT SIDEBAR (Desktop - Exact Screenshot Match) */}
+        {/* LEFT SIDEBAR (Desktop) */}
         <aside
           className={`${
             sidebarOpen ? 'w-64' : 'w-0 -ml-64'
@@ -152,111 +177,209 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
         >
           <div className="p-3.5 space-y-6">
             
-            {/* Top Home Link */}
-            <SidebarItem
-              icon={<Home size={16} />}
-              label="Home"
-              active={isNavActive('my-sheets')}
-              onClick={() => handleNavClick('my-sheets')}
-            />
+            {/* ========================================================= */}
+            {/* A. STUDENT SIDEBAR (Exact Codolio Match) */}
+            {/* ========================================================= */}
+            {isStudent && (
+              <>
+                <SidebarItem
+                  icon={<Home size={16} />}
+                  label="Home"
+                  active={isNavActive('my-sheets')}
+                  onClick={() => handleNavClick('my-sheets')}
+                />
 
-            {/* SECTION 1: PROFILE TRACKER */}
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                PROFILE TRACKER
-              </div>
-              <SidebarItem
-                icon={<Globe size={16} />}
-                label="Portfolio"
-                active={isNavActive('portfolio')}
-                onClick={() => handleNavClick('portfolio')}
-              />
-            </div>
+                {/* PROFILE TRACKER */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    PROFILE TRACKER
+                  </div>
+                  <SidebarItem
+                    icon={<Globe size={16} />}
+                    label="Portfolio"
+                    active={isNavActive('portfolio')}
+                    onClick={() => handleNavClick('portfolio')}
+                  />
+                </div>
 
-            {/* SECTION 2: QUESTION TRACKER */}
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                QUESTION TRACKER
-              </div>
-              <SidebarItem
-                icon={<Briefcase size={16} />}
-                label="Company Wise Kit"
-                active={isNavActive('explore-sheets')}
-                onClick={() => handleNavClick('explore-sheets')}
-                badge="Hot"
-              />
-              <SidebarItem
-                icon={<Laptop size={16} />}
-                label="My Workspace"
-                active={isNavActive('workspace')}
-                onClick={() => handleNavClick('workspace')}
-              />
-              <SidebarItem
-                icon={<Layers size={16} />}
-                label="Explore Sheets"
-                active={isNavActive('explore-sheets')}
-                onClick={() => handleNavClick('explore-sheets')}
-              />
-              <SidebarItem
-                icon={<FileText size={16} />}
-                label="My Sheets"
-                active={isNavActive('my-sheets')}
-                onClick={() => handleNavClick('my-sheets')}
-              />
-              <SidebarItem
-                icon={<Edit3 size={16} />}
-                label="Notes"
-                active={isNavActive('notes')}
-                onClick={() => handleNavClick('notes')}
-              />
-            </div>
+                {/* QUESTION TRACKER */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    QUESTION TRACKER
+                  </div>
+                  <SidebarItem
+                    icon={<Briefcase size={16} />}
+                    label="Company Wise Kit"
+                    active={isNavActive('explore-sheets')}
+                    onClick={() => handleNavClick('explore-sheets')}
+                    badge="Hot"
+                  />
+                  <SidebarItem
+                    icon={<Laptop size={16} />}
+                    label="My Workspace"
+                    active={isNavActive('workspace')}
+                    onClick={() => handleNavClick('workspace')}
+                  />
+                  <SidebarItem
+                    icon={<Layers size={16} />}
+                    label="Explore Sheets"
+                    active={isNavActive('explore-sheets')}
+                    onClick={() => handleNavClick('explore-sheets')}
+                  />
+                  <SidebarItem
+                    icon={<FileText size={16} />}
+                    label="My Sheets"
+                    active={isNavActive('my-sheets')}
+                    onClick={() => handleNavClick('my-sheets')}
+                  />
+                  <SidebarItem
+                    icon={<Edit3 size={16} />}
+                    label="Notes"
+                    active={isNavActive('notes')}
+                    onClick={() => handleNavClick('notes')}
+                  />
+                </div>
 
-            {/* SECTION 3: EVENT TRACKER */}
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                EVENT TRACKER
-              </div>
-              <SidebarItem
-                icon={<Calendar size={16} />}
-                label="Contests"
-                active={isNavActive('contests')}
-                onClick={() => handleNavClick('contests')}
-              />
-              <SidebarItem
-                icon={<ShieldCheck size={16} />}
-                label="Skill Assessments"
-                active={location.pathname === '/assessment'}
-                onClick={() => handleNavClick(null, '/assessment')}
-              />
-              <SidebarItem
-                icon={<Zap size={16} />}
-                label="Company Challenges"
-                active={location.pathname === '/challenges'}
-                onClick={() => handleNavClick(null, '/challenges')}
-              />
-            </div>
+                {/* EVENT TRACKER */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    EVENT TRACKER
+                  </div>
+                  <SidebarItem
+                    icon={<Calendar size={16} />}
+                    label="Contests"
+                    active={isNavActive('contests')}
+                    onClick={() => handleNavClick('contests')}
+                  />
+                  <SidebarItem
+                    icon={<ShieldCheck size={16} />}
+                    label="Skill Assessments"
+                    active={location.pathname === '/assessment'}
+                    onClick={() => handleNavClick(null, '/assessment')}
+                  />
+                  <SidebarItem
+                    icon={<Zap size={16} />}
+                    label="Company Challenges"
+                    active={location.pathname === '/challenges'}
+                    onClick={() => handleNavClick(null, '/challenges')}
+                  />
+                </div>
 
-            {/* SECTION 4: COMMUNITY */}
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                COMMUNITY
-              </div>
-              <SidebarItem
-                icon={<Trophy size={16} />}
-                label="Leaderboard"
-                active={isNavActive('leaderboard')}
-                onClick={() => handleNavClick('leaderboard')}
-              />
-              <SidebarItem
-                icon={<MessageSquare size={16} />}
-                label="Teacher & Recruiter"
-                active={isNavActive('interaction')}
-                onClick={() => handleNavClick('interaction')}
-                badge={stats?.interviews?.length > 0 ? `${stats.interviews.length}` : null}
-              />
-            </div>
+                {/* COMMUNITY */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    COMMUNITY
+                  </div>
+                  <SidebarItem
+                    icon={<Trophy size={16} />}
+                    label="Leaderboard"
+                    active={isNavActive('leaderboard')}
+                    onClick={() => handleNavClick('leaderboard')}
+                  />
+                  <SidebarItem
+                    icon={<MessageSquare size={16} />}
+                    label="Teacher & Recruiter"
+                    active={isNavActive('interaction')}
+                    onClick={() => handleNavClick('interaction')}
+                    badge={stats?.interviews?.length > 0 ? `${stats.interviews.length}` : null}
+                  />
+                </div>
+              </>
+            )}
 
-            {/* SECTION 5: SUPPORT */}
+            {/* ========================================================= */}
+            {/* B. COMPANY / RECRUITER SIDEBAR */}
+            {/* ========================================================= */}
+            {isCompany && (
+              <>
+                <SidebarItem
+                  icon={<Building2 size={16} />}
+                  label="Recruiter Overview"
+                  active={isNavActive('recruiter-overview')}
+                  onClick={() => handleNavClick('recruiter-overview')}
+                />
+
+                {/* TALENT & SOURCING */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    TALENT & SOURCING
+                  </div>
+                  <SidebarItem
+                    icon={<Users size={16} />}
+                    label="Verified Talent Pool"
+                    active={isNavActive('talents')}
+                    onClick={() => handleNavClick('talents')}
+                    badge="Active"
+                  />
+                  <SidebarItem
+                    icon={<Calendar size={16} />}
+                    label="Scheduled Interviews"
+                    active={isNavActive('recruiter-interviews')}
+                    onClick={() => handleNavClick('recruiter-interviews')}
+                    badge={stats?.interviews?.length > 0 ? `${stats.interviews.length}` : null}
+                  />
+                </div>
+
+                {/* HIRING CHALLENGES */}
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    HIRING CHALLENGES
+                  </div>
+                  <SidebarItem
+                    icon={<Zap size={16} />}
+                    label="Manage Challenges"
+                    active={location.pathname === '/challenges'}
+                    onClick={() => handleNavClick(null, '/challenges')}
+                  />
+                  <SidebarItem
+                    icon={<Trophy size={16} />}
+                    label="Campus Leaderboard"
+                    active={isNavActive('leaderboard')}
+                    onClick={() => handleNavClick('leaderboard')}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ========================================================= */}
+            {/* C. COLLEGE / FACULTY SIDEBAR */}
+            {/* ========================================================= */}
+            {isCollege && (
+              <>
+                <SidebarItem
+                  icon={<GraduationCap size={16} />}
+                  label="Campus Overview"
+                  active={isNavActive('campus-overview')}
+                  onClick={() => handleNavClick('campus-overview')}
+                />
+
+                <div className="space-y-1">
+                  <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
+                    STUDENT READINESS
+                  </div>
+                  <SidebarItem
+                    icon={<Users size={16} />}
+                    label="Batch Skill Ranks"
+                    active={isNavActive('talents')}
+                    onClick={() => handleNavClick('talents')}
+                  />
+                  <SidebarItem
+                    icon={<MessageSquare size={16} />}
+                    label="Student Endorsements"
+                    active={isNavActive('interaction')}
+                    onClick={() => handleNavClick('interaction')}
+                  />
+                  <SidebarItem
+                    icon={<Calendar size={16} />}
+                    label="Drive Interviews"
+                    active={isNavActive('recruiter-interviews')}
+                    onClick={() => handleNavClick('recruiter-interviews')}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* SUPPORT (Shared) */}
             <div className="space-y-1">
               <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
                 SUPPORT
@@ -274,6 +397,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                 onClick={() => handleNavClick('feedback')}
               />
             </div>
+
           </div>
 
           {/* SIDEBAR FOOTER */}
@@ -311,14 +435,24 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <SidebarItem icon={<Home size={16} />} label="Home" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
-                  <SidebarItem icon={<Globe size={16} />} label="Portfolio" active={isNavActive('portfolio')} onClick={() => handleNavClick('portfolio')} />
-                  <SidebarItem icon={<Briefcase size={16} />} label="Company Wise Kit" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
-                  <SidebarItem icon={<Layers size={16} />} label="Explore Sheets" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
-                  <SidebarItem icon={<FileText size={16} />} label="My Sheets" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
-                  <SidebarItem icon={<Calendar size={16} />} label="Contests" active={isNavActive('contests')} onClick={() => handleNavClick('contests')} />
-                  <SidebarItem icon={<Trophy size={16} />} label="Leaderboard" active={isNavActive('leaderboard')} onClick={() => handleNavClick('leaderboard')} />
-                  <SidebarItem icon={<MessageSquare size={16} />} label="Teacher & Recruiter" active={isNavActive('interaction')} onClick={() => handleNavClick('interaction')} />
+                  {isStudent ? (
+                    <>
+                      <SidebarItem icon={<Home size={16} />} label="Home" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
+                      <SidebarItem icon={<Globe size={16} />} label="Portfolio" active={isNavActive('portfolio')} onClick={() => handleNavClick('portfolio')} />
+                      <SidebarItem icon={<Briefcase size={16} />} label="Company Wise Kit" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
+                      <SidebarItem icon={<Layers size={16} />} label="Explore Sheets" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
+                      <SidebarItem icon={<FileText size={16} />} label="My Sheets" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
+                      <SidebarItem icon={<Calendar size={16} />} label="Contests" active={isNavActive('contests')} onClick={() => handleNavClick('contests')} />
+                      <SidebarItem icon={<Trophy size={16} />} label="Leaderboard" active={isNavActive('leaderboard')} onClick={() => handleNavClick('leaderboard')} />
+                    </>
+                  ) : (
+                    <>
+                      <SidebarItem icon={<Building2 size={16} />} label="Recruiter Overview" active={isNavActive('recruiter-overview')} onClick={() => handleNavClick('recruiter-overview')} />
+                      <SidebarItem icon={<Users size={16} />} label="Verified Talent Pool" active={isNavActive('talents')} onClick={() => handleNavClick('talents')} />
+                      <SidebarItem icon={<Calendar size={16} />} label="Scheduled Interviews" active={isNavActive('recruiter-interviews')} onClick={() => handleNavClick('recruiter-interviews')} />
+                      <SidebarItem icon={<Zap size={16} />} label="Company Challenges" active={location.pathname === '/challenges'} onClick={() => handleNavClick(null, '/challenges')} />
+                    </>
+                  )}
                 </div>
               </div>
 
