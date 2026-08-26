@@ -50,7 +50,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors hidden md:block"
+            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors hidden md:block cursor-pointer"
             title="Toggle Sidebar"
           >
             <PanelLeft size={18} />
@@ -59,7 +59,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors md:hidden"
+            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors md:hidden cursor-pointer"
           >
             <PanelLeft size={18} />
           </button>
@@ -79,8 +79,8 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
           {/* Company Wise Kit Pill Button */}
           <button
             type="button"
-            onClick={() => handleNavClick('company-kit')}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
+            onClick={() => handleNavClick('explore-sheets')}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer"
           >
             <span>Company Wise Kit</span>
             <span className="text-amber-400">🌟</span>
@@ -98,7 +98,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
             <button
               type="button"
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors relative"
+              className="p-2 rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors relative cursor-pointer"
             >
               <Bell size={17} />
               {(stats?.notifications?.length > 0 || stats?.interviews?.length > 0) && (
@@ -144,7 +144,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
       {/* Main Container: Sidebar + Content */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* LEFT SIDEBAR (Desktop) */}
+        {/* LEFT SIDEBAR (Desktop - Exact Screenshot Match) */}
         <aside
           className={`${
             sidebarOpen ? 'w-64' : 'w-0 -ml-64'
@@ -152,7 +152,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
         >
           <div className="p-3.5 space-y-6">
             
-            {/* Top Single Link */}
+            {/* Top Home Link */}
             <SidebarItem
               icon={<Home size={16} />}
               label="Home"
@@ -167,13 +167,13 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               </div>
               <SidebarItem
                 icon={<Globe size={16} />}
-                label="Portfolio & Verified Card"
+                label="Portfolio"
                 active={isNavActive('portfolio')}
                 onClick={() => handleNavClick('portfolio')}
               />
             </div>
 
-            {/* SECTION 2: QUESTION & CURRICULUM TRACKER */}
+            {/* SECTION 2: QUESTION TRACKER */}
             <div className="space-y-1">
               <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
                 QUESTION TRACKER
@@ -181,8 +181,8 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               <SidebarItem
                 icon={<Briefcase size={16} />}
                 label="Company Wise Kit"
-                active={isNavActive('company-kit')}
-                onClick={() => handleNavClick('company-kit')}
+                active={isNavActive('explore-sheets')}
+                onClick={() => handleNavClick('explore-sheets')}
                 badge="Hot"
               />
               <SidebarItem
@@ -199,13 +199,13 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               />
               <SidebarItem
                 icon={<FileText size={16} />}
-                label="My Sheets (9 Pillars)"
+                label="My Sheets"
                 active={isNavActive('my-sheets')}
                 onClick={() => handleNavClick('my-sheets')}
               />
               <SidebarItem
                 icon={<Edit3 size={16} />}
-                label="Notes & Cheatsheets"
+                label="Notes"
                 active={isNavActive('notes')}
                 onClick={() => handleNavClick('notes')}
               />
@@ -218,15 +218,21 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               </div>
               <SidebarItem
                 icon={<Calendar size={16} />}
-                label="Contests & Challenges"
-                active={location.pathname === '/challenges'}
-                onClick={() => handleNavClick(null, '/challenges')}
+                label="Contests"
+                active={isNavActive('contests')}
+                onClick={() => handleNavClick('contests')}
               />
               <SidebarItem
                 icon={<ShieldCheck size={16} />}
-                label="Skill Assessments Quiz"
+                label="Skill Assessments"
                 active={location.pathname === '/assessment'}
                 onClick={() => handleNavClick(null, '/assessment')}
+              />
+              <SidebarItem
+                icon={<Zap size={16} />}
+                label="Company Challenges"
+                active={location.pathname === '/challenges'}
+                onClick={() => handleNavClick(null, '/challenges')}
               />
             </div>
 
@@ -275,13 +281,13 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
             <SidebarItem
               icon={<User size={16} />}
               label="Edit Profile"
-              active={isNavActive('profile')}
-              onClick={() => handleNavClick('profile')}
+              active={isNavActive('portfolio')}
+              onClick={() => handleNavClick('portfolio')}
             />
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left cursor-pointer"
             >
               <LogOut size={16} className="text-red-400" />
               <span>Log Out</span>
@@ -299,17 +305,18 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                     <div className="w-7 h-7 rounded bg-blue-600 flex items-center justify-center font-bold text-white text-sm">L</div>
                     <span className="font-bold text-white text-sm">LinktoCompany</span>
                   </div>
-                  <button onClick={() => setMobileMenuOpen(false)} className="text-white/60 p-1">
+                  <button onClick={() => setMobileMenuOpen(false)} className="text-white/60 p-1 cursor-pointer">
                     <X size={18} />
                   </button>
                 </div>
 
                 <div className="space-y-1">
                   <SidebarItem icon={<Home size={16} />} label="Home" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
-                  <SidebarItem icon={<FileText size={16} />} label="My Sheets (9 Pillars)" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
-                  <SidebarItem icon={<Briefcase size={16} />} label="Company Wise Kit" active={isNavActive('company-kit')} onClick={() => handleNavClick('company-kit')} />
-                  <SidebarItem icon={<Calendar size={16} />} label="Contests & Challenges" active={location.pathname === '/challenges'} onClick={() => handleNavClick(null, '/challenges')} />
-                  <SidebarItem icon={<ShieldCheck size={16} />} label="Skill Assessments Quiz" active={location.pathname === '/assessment'} onClick={() => handleNavClick(null, '/assessment')} />
+                  <SidebarItem icon={<Globe size={16} />} label="Portfolio" active={isNavActive('portfolio')} onClick={() => handleNavClick('portfolio')} />
+                  <SidebarItem icon={<Briefcase size={16} />} label="Company Wise Kit" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
+                  <SidebarItem icon={<Layers size={16} />} label="Explore Sheets" active={isNavActive('explore-sheets')} onClick={() => handleNavClick('explore-sheets')} />
+                  <SidebarItem icon={<FileText size={16} />} label="My Sheets" active={isNavActive('my-sheets')} onClick={() => handleNavClick('my-sheets')} />
+                  <SidebarItem icon={<Calendar size={16} />} label="Contests" active={isNavActive('contests')} onClick={() => handleNavClick('contests')} />
                   <SidebarItem icon={<Trophy size={16} />} label="Leaderboard" active={isNavActive('leaderboard')} onClick={() => handleNavClick('leaderboard')} />
                   <SidebarItem icon={<MessageSquare size={16} />} label="Teacher & Recruiter" active={isNavActive('interaction')} onClick={() => handleNavClick('interaction')} />
                 </div>
@@ -319,7 +326,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 text-xs text-red-400 font-semibold py-2"
+                  className="w-full flex items-center gap-2 text-xs text-red-400 font-semibold py-2 cursor-pointer"
                 >
                   <LogOut size={16} /> Log Out
                 </button>
@@ -342,7 +349,7 @@ const SidebarItem = ({ icon, label, active, onClick, badge }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all text-left ${
+    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all text-left cursor-pointer ${
       active
         ? 'bg-blue-600/15 text-blue-400 font-semibold border border-blue-500/30 shadow-sm'
         : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
