@@ -296,9 +296,9 @@ def send_email(to_email: str, subject: str, html_content: str) -> Tuple[bool, st
 
     print(f"[EMAIL FAIL] To: {to_email} | {' | '.join(errors) or 'no email provider configured'}")
     hint = (
-        "OTP email could not be delivered from Render. Gmail SMTP is blocked on Render's free plan. "
-        "Add a BREVO_API_KEY (recommended: verify your Gmail as sender at brevo.com) "
-        "or verify a domain on Resend so mail can be sent to any inbox."
+        "OTP email could not be delivered from Render. Gmail SMTP is blocked on the free plan. "
+        "Use your existing Gmail via Google Apps Script: deploy backend/gmail_https_relay.gs "
+        "and set EMAIL_HTTPS_WEBHOOK plus EMAIL_WEBHOOK_SECRET on Render."
     )
     if errors:
         return False, hint
@@ -580,8 +580,7 @@ def send_otp(req: SendOtpRequest):
         "success": True,
         "message": f"Verification code generated for {email}",
         "email_delivered": sent,
-        "delivery_status": msg,
-        "dev_otp": otp if not sent else None
+        "delivery_status": msg
     }
 
 @app.post("/api/auth/register")

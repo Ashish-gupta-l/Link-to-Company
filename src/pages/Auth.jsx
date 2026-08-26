@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Mail, ShieldCheck, CheckCircle2, KeyRound } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -24,7 +24,6 @@ const Auth = () => {
   const [regOtp, setRegOtp] = useState('');
   
   const [otpSent, setOtpSent] = useState(false);
-  const [fallbackOtp, setFallbackOtp] = useState(null);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -39,19 +38,13 @@ const Auth = () => {
       setOtpSent(true);
       if (res.email_delivered) {
         toast({
-          title: 'OTP Delivered to Email!',
-          description: `Check your inbox and spam folder for ${regEmail}. The 6-digit code is valid for 10 minutes.`,
-        });
-      } else if (res.dev_otp) {
-        setFallbackOtp(res.dev_otp);
-        toast({
-          title: 'Verification Code Ready!',
-          description: `Your OTP is: ${res.dev_otp} (Auto-ready for verification).`,
+          title: 'OTP Sent to Your Email!',
+          description: `Check your Gmail inbox and spam folder at ${regEmail} for the 6-digit code.`,
         });
       } else {
         toast({
-          title: 'OTP Requested',
-          description: `Verification requested for ${regEmail}. Check your inbox.`,
+          title: 'Verification Code Dispatched',
+          description: `OTP dispatched to ${regEmail}. Please check your email.`,
         });
       }
     } catch (err) {
@@ -91,7 +84,7 @@ const Auth = () => {
       return;
     }
     if (!otpSent || !regOtp || regOtp.trim().length !== 6) {
-      toast({ title: 'Email Verification Required', description: 'Please click "Send OTP" and enter the 6-digit verification code.', variant: 'destructive' });
+      toast({ title: 'Email Verification Required', description: 'Please click "Send OTP" and enter the 6-digit verification code sent to your email inbox.', variant: 'destructive' });
       return;
     }
     setLoading(true);
@@ -107,7 +100,7 @@ const Auth = () => {
       toast({ title: 'Account Verified & Created!', description: `Welcome to LinktoCompany, ${res.user.name}` });
       navigate('/dashboard');
     } catch (err) {
-      toast({ title: 'Verification Failed', description: err?.response?.data?.detail || 'Incorrect or expired OTP.', variant: 'destructive' });
+      toast({ title: 'Verification Failed', description: err?.response?.data?.detail || 'Incorrect or expired OTP code.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -135,15 +128,15 @@ const Auth = () => {
               <span className="text-blue-500">Verified access.</span>
             </h1>
             <p className="text-white/55 mt-6 max-w-md leading-relaxed">
-              LinktoCompany strictly enforces <strong>real-email identity verification</strong>. Fake candidate profiles and disposable accounts are blocked.
+              LinktoCompany strictly enforces <strong>real-email inbox identity verification</strong>. Fake candidate profiles and disposable accounts are blocked.
             </p>
 
             <div className="mt-8 space-y-3 max-w-md">
               <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
                 <Mail className="text-emerald-400 shrink-0" size={20} />
                 <div>
-                  <div className="text-sm font-semibold text-white">Live Email Verification</div>
-                  <div className="text-xs text-white/50 mt-0.5">Secure 6-digit one-time code delivered to your verified email address.</div>
+                  <div className="text-sm font-semibold text-white">Live Email Inbox Delivery</div>
+                  <div className="text-xs text-white/50 mt-0.5">Secure 6-digit one-time code delivered to your verified email inbox.</div>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0b0d13]">
@@ -242,20 +235,8 @@ const Auth = () => {
                     {otpSent && (
                       <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                         <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
-                          <CheckCircle2 size={15} /> OTP Code dispatched for {regEmail}
+                          <CheckCircle2 size={15} /> 6-digit OTP code sent to {regEmail}
                         </div>
-                        {fallbackOtp && (
-                          <div className="text-xs bg-[#0b0d13] border border-emerald-500/30 rounded p-2 text-emerald-300 font-mono flex items-center justify-between">
-                            <span>Verification Code: <strong className="text-white text-sm tracking-widest">{fallbackOtp}</strong></span>
-                            <button
-                              type="button"
-                              onClick={() => setRegOtp(fallbackOtp)}
-                              className="text-[11px] underline text-emerald-400 hover:text-emerald-300 ml-2"
-                            >
-                              Auto-fill
-                            </button>
-                          </div>
-                        )}
                         <Label className="text-xs text-white/90">Enter 6-Digit Email OTP *</Label>
                         <Input
                           value={regOtp}
@@ -265,6 +246,9 @@ const Auth = () => {
                           required
                           className="bg-[#0a0c11] border-white/20 text-white font-mono text-center tracking-widest text-lg font-bold"
                         />
+                        <div className="text-[11px] text-white/50">
+                          Please check your email inbox (and spam folder) for the verification code.
+                        </div>
                       </div>
                     )}
 
