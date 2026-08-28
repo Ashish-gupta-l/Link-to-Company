@@ -64,6 +64,10 @@ export const leaderboardApi = {
   syncLeetcode: (username) => api.post('/profile/leetcode/sync', { username }).then((r) => r.data),
 };
 
+export const eventsApi = {
+  list: (params = {}) => api.get('/events', { params }).then((r) => r.data),
+};
+
 export const adminApi = {
   getVerifications: () => api.get('/admin/verifications').then((r) => r.data),
   verifyCompany: (userId, status) => api.post('/admin/verify-company', { user_id: userId, status }).then((r) => r.data),

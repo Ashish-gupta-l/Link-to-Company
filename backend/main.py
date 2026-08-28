@@ -1659,6 +1659,197 @@ def get_campus_leaderboard(
         "current_user_rank": current_user_rank
     }
 
+# ----------------- Contest & Event Tracker -----------------
+@app.get("/api/events")
+def get_contest_events(
+    platform: Optional[str] = "all",
+    status: Optional[str] = "all",
+    search: Optional[str] = ""
+):
+    now_dt = datetime.now(timezone.utc)
+    
+    events_raw = [
+        {
+            "id": "lc-weekly-413",
+            "platform": "LeetCode",
+            "platform_code": "leetcode",
+            "title": "LeetCode Weekly Contest 413",
+            "type": "Rated Contest",
+            "division": "Rated for All",
+            "start_time": (now_dt + timedelta(hours=14)).isoformat(),
+            "end_time": (now_dt + timedelta(hours=15, minutes=30)).isoformat(),
+            "duration": "1 hr 30 mins",
+            "url": "https://leetcode.com/contest/",
+            "banner": "https://assets.leetcode.com/static_assets/public/images/LeetCode_logo.png",
+            "tags": ["DSA", "Algorithms", "Global Rating"],
+            "description": "Weekly rated algorithmic problem solving contest with 4 DSA challenges.",
+            "is_live": False
+        },
+        {
+            "id": "cf-round-970",
+            "platform": "Codeforces",
+            "platform_code": "codeforces",
+            "title": "Codeforces Round 970 (Div. 3)",
+            "type": "Rated Contest",
+            "division": "Div. 3 (Rating < 1600)",
+            "start_time": (now_dt + timedelta(hours=21, minutes=35)).isoformat(),
+            "end_time": (now_dt + timedelta(hours=23, minutes=50)).isoformat(),
+            "duration": "2 hrs 15 mins",
+            "url": "https://codeforces.com/contests",
+            "banner": "https://codeforces.org/s/0/favicon-32x32.png",
+            "tags": ["Competitive Programming", "Math", "Greedy"],
+            "description": "Rated round for Division 3 competitors featuring 7-8 progressive difficulty problems.",
+            "is_live": False
+        },
+        {
+            "id": "cc-starters-150",
+            "platform": "CodeChef",
+            "platform_code": "codechef",
+            "title": "CodeChef Starters 150 (Rated for All)",
+            "type": "Rated Contest",
+            "division": "Div 1, 2, 3, 4",
+            "start_time": (now_dt + timedelta(days=1, hours=14, minutes=30)).isoformat(),
+            "end_time": (now_dt + timedelta(days=1, hours=16, minutes=30)).isoformat(),
+            "duration": "2 hrs",
+            "url": "https://www.codechef.com/contests",
+            "banner": "https://cdn.codechef.com/images/cc-logo.svg",
+            "tags": ["Arrays", "Trees", "Dynamic Programming"],
+            "description": "Mid-week speed programming challenge with separate divisions for beginners and grandmasters.",
+            "is_live": False
+        },
+        {
+            "id": "ac-abc-369",
+            "platform": "AtCoder",
+            "platform_code": "atcoder",
+            "title": "AtCoder Beginner Contest 369 (ABC 369)",
+            "type": "Rated Contest",
+            "division": "Rated up to 1999",
+            "start_time": (now_dt + timedelta(days=2, hours=12)).isoformat(),
+            "end_time": (now_dt + timedelta(days=2, hours=13, minutes=40)).isoformat(),
+            "duration": "100 mins",
+            "url": "https://atcoder.jp/contests/",
+            "banner": "https://img.atcoder.jp/assets/logo.png",
+            "tags": ["High Precision", "Short Statements", "Speed"],
+            "description": "High-quality problem set with 7 problems ranging from beginner arithmetic to graph theory.",
+            "is_live": False
+        },
+        {
+            "id": "lc-biweekly-138",
+            "platform": "LeetCode",
+            "platform_code": "leetcode",
+            "title": "LeetCode Biweekly Contest 138",
+            "type": "Rated Contest",
+            "division": "Rated for All",
+            "start_time": (now_dt + timedelta(days=2, hours=14, minutes=30)).isoformat(),
+            "end_time": (now_dt + timedelta(days=2, hours=16)).isoformat(),
+            "duration": "1 hr 30 mins",
+            "url": "https://leetcode.com/contest/",
+            "banner": "https://assets.leetcode.com/static_assets/public/images/LeetCode_logo.png",
+            "tags": ["Data Structures", "Dynamic Programming"],
+            "description": "Biweekly Saturday evening contest designed to simulate real software engineering coding interviews.",
+            "is_live": False
+        },
+        {
+            "id": "gfg-weekly-170",
+            "platform": "GeeksforGeeks",
+            "platform_code": "geeksforgeeks",
+            "title": "GFG Weekly Coding Contest 170",
+            "type": "Hiring & Rated",
+            "division": "Campus & Open",
+            "start_time": (now_dt + timedelta(days=3, hours=13, minutes=30)).isoformat(),
+            "end_time": (now_dt + timedelta(days=3, hours=15)).isoformat(),
+            "duration": "1 hr 30 mins",
+            "url": "https://practice.geeksforgeeks.org/events",
+            "banner": "https://media.geeksforgeeks.org/gfg-gg-logo.svg",
+            "tags": ["Job-A-Thon", "SDE Hiring", "Puzzles"],
+            "description": "Weekly contest featuring interview-favorite questions with direct recruiter leaderboard sharing.",
+            "is_live": False
+        },
+        {
+            "id": "cf-round-971-div2",
+            "platform": "Codeforces",
+            "platform_code": "codeforces",
+            "title": "Codeforces Round 971 (Div. 2)",
+            "type": "Rated Contest",
+            "division": "Div. 2",
+            "start_time": (now_dt + timedelta(days=3, hours=14, minutes=35)).isoformat(),
+            "end_time": (now_dt + timedelta(days=3, hours=16, minutes=35)).isoformat(),
+            "duration": "2 hrs",
+            "url": "https://codeforces.com/contests",
+            "banner": "https://codeforces.org/s/0/favicon-32x32.png",
+            "tags": ["Graphs", "Constructive Algorithms", "Number Theory"],
+            "description": "Prestigious Division 2 round for competitive programmers worldwide.",
+            "is_live": False
+        },
+        {
+            "id": "hackerrank-euler",
+            "platform": "HackerRank",
+            "platform_code": "hackerrank",
+            "title": "ProjectEuler+ Ongoing Challenge",
+            "type": "Practice & Rated",
+            "division": "Open to All",
+            "start_time": (now_dt - timedelta(hours=2)).isoformat(),
+            "end_time": (now_dt + timedelta(days=30)).isoformat(),
+            "duration": "Ongoing",
+            "url": "https://www.hackerrank.com/contests/projecteuler",
+            "banner": "https://hrcdn.net/fcore/assets/brand/h_mark_sm-3f0f73d24a.svg",
+            "tags": ["Mathematics", "Combinatorics", "Number Theory"],
+            "description": "Mathematical algorithm problems solved with computer programs.",
+            "is_live": True
+        },
+        {
+            "id": "sih-2026-hackathon",
+            "platform": "Hackathon",
+            "platform_code": "hackathon",
+            "title": "Smart India Hackathon 2026 Innovation Sprint",
+            "type": "National Hackathon",
+            "division": "College Teams (6 members)",
+            "start_time": (now_dt + timedelta(days=5, hours=9)).isoformat(),
+            "end_time": (now_dt + timedelta(days=6, hours=21)).isoformat(),
+            "duration": "36 hrs",
+            "url": "https://sih.gov.in",
+            "banner": "https://sih.gov.in/img1/SIH_Logo.png",
+            "tags": ["Full Stack", "AI/ML", "Hardware & Software", "National Final"],
+            "description": "India's premier nationwide hackathon to solve pressing real-world challenges posed by Ministries & Tech Industries.",
+            "is_live": False
+        },
+        {
+            "id": "gfg-jobathon-35",
+            "platform": "GeeksforGeeks",
+            "platform_code": "geeksforgeeks",
+            "title": "Job-A-Thon 35 (Exclusive SDE Hiring Challenge)",
+            "type": "Hiring Challenge",
+            "division": "Graduating 2025/2026 Batches",
+            "start_time": (now_dt + timedelta(days=6, hours=14, minutes=30)).isoformat(),
+            "end_time": (now_dt + timedelta(days=6, hours=17)).isoformat(),
+            "duration": "2.5 hrs",
+            "url": "https://practice.geeksforgeeks.org/events",
+            "banner": "https://media.geeksforgeeks.org/gfg-gg-logo.svg",
+            "tags": ["Direct Interviews", "₹12-24 LPA", "Top Companies"],
+            "description": "Exclusive placement drive where top performers receive direct interview calls from 20+ hiring partner companies.",
+            "is_live": False
+        }
+    ]
+    
+    if platform and platform.lower() != "all":
+        events_raw = [e for e in events_raw if e["platform_code"].lower() == platform.lower() or e["platform"].lower() == platform.lower()]
+        
+    if status == "live":
+        events_raw = [e for e in events_raw if e.get("is_live")]
+    elif status == "today":
+        events_raw = [e for e in events_raw if (datetime.fromisoformat(e["start_time"]) - now_dt).total_seconds() < 86400]
+        
+    if search and search.strip():
+        q = search.strip().lower()
+        events_raw = [e for e in events_raw if q in e["title"].lower() or q in e["platform"].lower() or any(q in t.lower() for t in e.get("tags", []))]
+        
+    return {
+        "events": events_raw,
+        "total_count": len(events_raw),
+        "live_count": len([e for e in events_raw if e.get("is_live")]),
+        "upcoming_count": len([e for e in events_raw if not e.get("is_live")])
+    }
+
 @app.get("/api/profile/company")
 def get_company_profile(user: dict = Depends(get_current_user)):
     conn = get_db()

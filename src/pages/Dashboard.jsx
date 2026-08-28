@@ -8,7 +8,7 @@ import {
   Share2, ExternalLink, Code2, Play, Search, Filter, Compass, Clock, Check,
   Lock, Unlock, ChevronLeft, Bell, Star, TrendingUp, Info, Users, PlusCircle,
   X, Loader2, BarChart2, AlertCircle, CheckCircle, FileCode, SlidersHorizontal,
-  RefreshCw, Medal
+  RefreshCw, Medal, CalendarPlus, Radio, BookmarkCheck, LayoutGrid, List
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import {
@@ -18,7 +18,8 @@ import {
   challengeApi,
   analyticsApi,
   adminApi,
-  leaderboardApi
+  leaderboardApi,
+  eventsApi
 } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { Button } from '../components/ui/button';
@@ -338,6 +339,67 @@ const Dashboard = () => {
   const [leetcodeInput, setLeetcodeInput] = useState('');
   const [syncingLeetcode, setSyncingLeetcode] = useState(false);
 
+  // Codolio Match: Event Tracker & Contest State
+  const [eventsList, setEventsList] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventPlatformFilter, setEventPlatformFilter] = useState('all');
+  const [eventStatusFilter, setEventStatusFilter] = useState('all');
+  const [eventSearch, setEventSearch] = useState('');
+  const [eventViewMode, setEventViewMode] = useState('grid');
+  const [bookmarkedEvents, setBookmarkedEvents] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ltc_bookmarked_events');
+      return saved ? JSON.parse(saved) : { 'cc-starters-150': true, 'lc-weekly-413': true };
+    } catch {
+      return {};
+    }
+  });
+
+  const getGoogleCalendarUrl = (contest) => {
+    const title = encodeURIComponent(contest.title || 'Coding Contest');
+    const details = encodeURIComponent(`${contest.description || contest.title}\n\nPlatform: ${contest.platform}\nDivision: ${contest.division || 'All'}\nContest URL: ${contest.url}`);
+    const locationStr = encodeURIComponent(contest.url || 'Online');
+    
+    let startIso = '';
+    let endIso = '';
+    try {
+      const sDate = contest.start_time ? new Date(contest.start_time) : new Date(Date.now() + 3600000);
+      const eDate = contest.end_time ? new Date(contest.end_time) : new Date(sDate.getTime() + 7200000);
+      startIso = sDate.toISOString().replace(/-|:|\.\d\d\d/g, '');
+      endIso = eDate.toISOString().replace(/-|:|\.\d\d\d/g, '');
+    } catch {
+      const now = new Date();
+      startIso = now.toISOString().replace(/-|:|\.\d\d\d/g, '');
+      endIso = new Date(now.getTime() + 7200000).toISOString().replace(/-|:|\.\d\d\d/g, '');
+    }
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startIso}/${endIso}&details=${details}&location=${locationStr}`;
+  };
+
+  const loadEvents = async (platform = eventPlatformFilter, status = eventStatusFilter, search = eventSearch) => {
+    setEventsLoading(true);
+    try {
+      const res = await eventsApi.list({ platform, status, search });
+      setEventsList(res.events || []);
+    } catch (err) {
+      setEventsList([]);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  const toggleBookmarkEvent = (eventId, eventTitle) => {
+    setBookmarkedEvents((prev) => {
+      const updated = { ...prev, [eventId]: !prev[eventId] };
+      localStorage.setItem('ltc_bookmarked_events', JSON.stringify(updated));
+      toast({
+        title: updated[eventId] ? 'Contest Bookmarked! 🔔' : 'Bookmark Removed',
+        description: updated[eventId] ? `You will be notified before ${eventTitle} begins.` : 'Event removed from tracked list.'
+      });
+      return updated;
+    });
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
@@ -420,6 +482,7 @@ const Dashboard = () => {
     dashboardApi.stats().then((data) => setStats(data)).catch(() => {});
     dashboardApi.listTalents().then((r) => setTalents(r.talents || [])).catch(() => {});
     loadLeaderboard();
+    loadEvents();
 
     if (isStudent) {
       profileApi.getStudentProfile().then((res) => {
@@ -460,6 +523,12 @@ const Dashboard = () => {
       loadLeaderboard(scoreType, leaderboardCollegeFilter, leaderboardSearch);
     }
   }, [activeTab, scoreType, leaderboardCollegeFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'contests' || activeTab === 'contests-calendar' || activeTab === 'event-tracker') {
+      loadEvents(eventPlatformFilter, eventStatusFilter, eventSearch);
+    }
+  }, [activeTab, eventPlatformFilter, eventStatusFilter]);
 
   // Skill Chip Add & Remove
   const handleAddSkill = (e) => {
@@ -1850,28 +1919,487 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* VIEW: CONTESTS */}
-            {(activeTab === 'contests' || activeTab === 'contests-calendar') && (
+            {/* VIEW: CONTESTS & EVENT TRACKER (CODOLIO MATCH) */}
+            {(activeTab === 'contests' || activeTab === 'contests-calendar' || activeTab === 'event-tracker') && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-black text-white">Contest Calendar</h1>
-                <div className="grid md:grid-cols-2 gap-4">
-                  {CONTESTS_DATA.map((contest) => (
-                    <div key={contest.id} className="p-5 rounded-xl border border-white/10 bg-[#0b0d14] space-y-3">
-                      <div className="flex justify-between items-center text-xs font-mono">
-                        <span className="text-emerald-400 font-bold">{contest.platform}</span>
+                {/* Hero Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                        <Calendar size={22} />
+                      </div>
+                      <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                        Event Tracker & Contest Calendar
+                      </h1>
+                    </div>
+                    <p className="text-xs md:text-sm text-white/60 mt-1">
+                      Track live & upcoming coding contests, hackathons, and hiring challenges across LeetCode, Codeforces, CodeChef, AtCoder, GeeksforGeeks, and HackerRank.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => loadEvents(eventPlatformFilter, eventStatusFilter, eventSearch)}
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-white/80 hover:bg-white/5 text-xs font-mono"
+                    >
+                      <RefreshCw size={13} className={`mr-1.5 ${eventsLoading ? 'animate-spin' : ''}`} />
+                      Refresh Feed
+                    </Button>
+                  </div>
+                </div>
+
+                {/* KPI Metrics Strip */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-2xl border border-rose-500/20 bg-gradient-to-b from-rose-950/20 to-[#0b0d14] space-y-1">
+                    <div className="flex items-center justify-between text-xs text-white/60 font-mono">
+                      <span>Live Ongoing</span>
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                    </div>
+                    <div className="text-xl font-black text-white font-mono flex items-center gap-2">
+                      {eventsList.filter((e) => e.is_live).length} <span className="text-xs text-rose-400 font-normal">Active Contests</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-950/20 to-[#0b0d14] space-y-1">
+                    <div className="flex items-center justify-between text-xs text-white/60 font-mono">
+                      <span>Next 48 Hours</span>
+                      <Clock size={13} className="text-amber-400" />
+                    </div>
+                    <div className="text-xl font-black text-white font-mono flex items-center gap-2">
+                      {eventsList.filter((e) => !e.is_live && (new Date(e.start_time) - new Date()) < 172800000).length} <span className="text-xs text-amber-400 font-normal">Upcoming</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-950/20 to-[#0b0d14] space-y-1">
+                    <div className="flex items-center justify-between text-xs text-white/60 font-mono">
+                      <span>Platforms Tracked</span>
+                      <Globe size={13} className="text-blue-400" />
+                    </div>
+                    <div className="text-xl font-black text-white font-mono flex items-center gap-2">
+                      7 <span className="text-xs text-blue-400 font-normal">CP & Hackathons</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-[#0b0d14] space-y-1">
+                    <div className="flex items-center justify-between text-xs text-white/60 font-mono">
+                      <span>My Subscriptions</span>
+                      <BookmarkCheck size={13} className="text-emerald-400" />
+                    </div>
+                    <div className="text-xl font-black text-emerald-400 font-mono flex items-center gap-2">
+                      {Object.values(bookmarkedEvents).filter(Boolean).length} <span className="text-xs text-white/50 font-normal">Bookmarked</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Platform Filters Bar (Codolio Match) */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    {[
+                      { id: 'all', label: 'All Platforms', color: 'bg-white/10 text-white' },
+                      { id: 'leetcode', label: 'LeetCode', color: 'bg-[#FFA116]/10 text-[#FFA116] border-[#FFA116]/30' },
+                      { id: 'codeforces', label: 'Codeforces', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+                      { id: 'codechef', label: 'CodeChef', color: 'bg-amber-600/10 text-amber-400 border-amber-600/30' },
+                      { id: 'atcoder', label: 'AtCoder', color: 'bg-slate-400/10 text-slate-300 border-slate-400/30' },
+                      { id: 'geeksforgeeks', label: 'GeeksforGeeks', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+                      { id: 'hackerrank', label: 'HackerRank', color: 'bg-teal-500/10 text-teal-400 border-teal-500/30' },
+                      { id: 'hackathon', label: 'Hackathons & Hiring', color: 'bg-purple-500/10 text-purple-400 border-purple-500/30' }
+                    ].map((p) => {
+                      const active = eventPlatformFilter === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setEventPlatformFilter(p.id);
+                            loadEvents(p.id, eventStatusFilter, eventSearch);
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-mono font-medium transition-all whitespace-nowrap border ${
+                            active
+                              ? 'bg-white text-black font-bold shadow-lg shadow-white/10 border-white'
+                              : 'bg-[#0b0d14] hover:bg-white/5 text-white/70 hover:text-white border-white/10'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Status Tabs & Search & View Mode Switcher */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                      {[
+                        { id: 'all', label: 'All Events' },
+                        { id: 'live', label: '🔴 Live Now' },
+                        { id: 'today', label: '🕒 Today & Tomorrow' },
+                        { id: 'bookmarked', label: '🔔 Bookmarked' }
+                      ].map((st) => {
+                        const active = eventStatusFilter === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => {
+                              setEventStatusFilter(st.id);
+                              loadEvents(eventPlatformFilter, st.id, eventSearch);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                              active
+                                ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
+                                : 'text-white/60 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <div className="relative min-w-[220px]">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                        <Input
+                          placeholder="Search contest or tags..."
+                          value={eventSearch}
+                          onChange={(e) => {
+                            setEventSearch(e.target.value);
+                            loadEvents(eventPlatformFilter, eventStatusFilter, e.target.value);
+                          }}
+                          className="pl-8 bg-[#0b0d14] border-white/10 text-white text-xs h-9"
+                        />
+                      </div>
+
+                      <div className="flex items-center bg-[#0b0d14] border border-white/10 rounded-lg p-0.5">
                         <button
                           type="button"
-                          onClick={() => handleSubscribeContest(contest.id, contest.title)}
-                          className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-white text-xs"
+                          onClick={() => setEventViewMode('grid')}
+                          className={`p-1.5 rounded-md text-xs transition-colors ${eventViewMode === 'grid' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'}`}
+                          title="Grid View"
                         >
-                          {subscribedContests[contest.id] ? '✓ Subscribed' : 'Subscribe'}
+                          <LayoutGrid size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEventViewMode('list')}
+                          className={`p-1.5 rounded-md text-xs transition-colors ${eventViewMode === 'list' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'}`}
+                          title="List View"
+                        >
+                          <List size={14} />
                         </button>
                       </div>
-                      <h3 className="font-bold text-white text-sm">{contest.title}</h3>
-                      <div className="text-xs text-white/50 font-mono">{contest.time} ({contest.duration})</div>
                     </div>
-                  ))}
+                  </div>
                 </div>
+
+                {/* Events Feed Content */}
+                {eventsLoading ? (
+                  <div className="p-16 text-center space-y-3 rounded-2xl border border-white/10 bg-[#0b0d14]">
+                    <Loader2 size={32} className="animate-spin text-orange-400 mx-auto" />
+                    <p className="text-xs text-white/60 font-mono">Syncing live contest schedules from platform feeds...</p>
+                  </div>
+                ) : eventsList.length === 0 ? (
+                  <div className="p-16 text-center space-y-3 rounded-2xl border border-white/10 bg-[#0b0d14]">
+                    <Calendar size={36} className="text-white/20 mx-auto" />
+                    <p className="text-sm font-bold text-white">No contests found for this filter</p>
+                    <p className="text-xs text-white/50">Try selecting 'All Platforms' or clearing your search.</p>
+                  </div>
+                ) : eventViewMode === 'grid' ? (
+                  /* Grid Card View */
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {eventsList
+                      .filter((e) => {
+                        if (eventStatusFilter === 'bookmarked') return bookmarkedEvents[e.id];
+                        return true;
+                      })
+                      .map((contest) => {
+                        const isBookmarked = !!bookmarkedEvents[contest.id];
+                        const startDate = new Date(contest.start_time);
+                        const isLive = contest.is_live;
+
+                        // Calculate relative time
+                        const diffMs = startDate - new Date();
+                        let relativeStr = '';
+                        if (isLive) {
+                          relativeStr = 'Live Now 🔴';
+                        } else if (diffMs > 0) {
+                          const diffHours = Math.floor(diffMs / 3600000);
+                          const diffMins = Math.floor((diffMs % 3600000) / 60000);
+                          if (diffHours >= 24) {
+                            const days = Math.floor(diffHours / 24);
+                            relativeStr = `Starts in ${days}d ${diffHours % 24}h`;
+                          } else {
+                            relativeStr = `Starts in ${diffHours}h ${diffMins}m`;
+                          }
+                        } else {
+                          relativeStr = 'Scheduled';
+                        }
+
+                        // Formatted IST date
+                        const formattedDateStr = startDate.toLocaleString('en-IN', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        }) + ' IST';
+
+                        return (
+                          <div
+                            key={contest.id}
+                            className={`rounded-2xl border bg-[#0b0d14] p-5 space-y-4 shadow-xl transition-all hover:border-white/25 flex flex-col justify-between ${
+                              isLive
+                                ? 'border-rose-500/40 bg-gradient-to-b from-rose-950/20 via-[#0b0d14] to-[#0b0d14]'
+                                : isBookmarked
+                                ? 'border-amber-500/30'
+                                : 'border-white/10'
+                            }`}
+                          >
+                            <div className="space-y-3">
+                              {/* Top Bar: Platform & Status & Bookmark */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border ${
+                                      contest.platform_code === 'leetcode'
+                                        ? 'bg-[#FFA116]/15 text-[#FFA116] border-[#FFA116]/30'
+                                        : contest.platform_code === 'codeforces'
+                                        ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                        : contest.platform_code === 'codechef'
+                                        ? 'bg-amber-600/15 text-amber-300 border-amber-600/30'
+                                        : contest.platform_code === 'geeksforgeeks'
+                                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                        : contest.platform_code === 'hackathon'
+                                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                                        : 'bg-white/10 text-white/80 border-white/15'
+                                    }`}
+                                  >
+                                    {contest.platform}
+                                  </span>
+
+                                  <span className="text-[10px] text-white/50 font-mono">
+                                    {contest.division || 'Rated for All'}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBookmarkEvent(contest.id, contest.title)}
+                                  className={`p-1.5 rounded-lg border transition-colors ${
+                                    isBookmarked
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                      : 'bg-white/5 text-white/40 hover:text-white border-white/10'
+                                  }`}
+                                  title={isBookmarked ? 'Remove Bookmark' : 'Add to Tracked Contests'}
+                                >
+                                  <Star size={14} className={isBookmarked ? 'fill-amber-400 text-amber-400' : ''} />
+                                </button>
+                              </div>
+
+                              {/* Title & Description */}
+                              <div>
+                                <a
+                                  href={contest.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-white text-sm md:text-base hover:text-amber-400 transition-colors line-clamp-2"
+                                >
+                                  {contest.title}
+                                </a>
+                                <p className="text-xs text-white/60 mt-1 line-clamp-2">
+                                  {contest.description}
+                                </p>
+                              </div>
+
+                              {/* Tags */}
+                              {contest.tags && contest.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {contest.tags.map((tg) => (
+                                    <span
+                                      key={tg}
+                                      className="px-2 py-0.5 rounded bg-white/[0.04] text-white/50 text-[10px] font-mono border border-white/[0.06]"
+                                    >
+                                      #{tg}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Timing & Actions */}
+                            <div className="space-y-3 pt-3 border-t border-white/10">
+                              <div className="flex items-center justify-between text-xs font-mono">
+                                <div className="flex items-center gap-1.5 text-white/80">
+                                  <Calendar size={13} className="text-white/40" />
+                                  <span className="text-[11px]">{formattedDateStr}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-white/50 text-[11px]">
+                                  <Clock size={12} />
+                                  {contest.duration}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`text-[11px] font-mono font-bold ${
+                                    isLive ? 'text-rose-400' : 'text-amber-400'
+                                  }`}
+                                >
+                                  {relativeStr}
+                                </span>
+
+                                <div className="flex items-center gap-1.5">
+                                  <a
+                                    href={getGoogleCalendarUrl(contest)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 text-xs transition-colors"
+                                    title="Add to Google Calendar"
+                                  >
+                                    <CalendarPlus size={13} />
+                                  </a>
+                                  <a
+                                    href={contest.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-mono text-xs font-bold transition-colors"
+                                  >
+                                    <span>Register</span>
+                                    <ExternalLink size={11} />
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  /* List Table View */
+                  <div className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden shadow-2xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs md:text-sm">
+                        <thead className="bg-[#08090e] border-b border-white/10 text-white/50 font-mono text-[11px] uppercase tracking-wider">
+                          <tr>
+                            <th className="p-4 w-28">Status</th>
+                            <th className="p-4 w-32">Platform</th>
+                            <th className="p-4 min-w-[280px]">Contest Name & Details</th>
+                            <th className="p-4 min-w-[200px]">Date & Time</th>
+                            <th className="p-4 text-center w-28">Duration</th>
+                            <th className="p-4 text-right min-w-[160px]">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {eventsList
+                            .filter((e) => {
+                              if (eventStatusFilter === 'bookmarked') return bookmarkedEvents[e.id];
+                              return true;
+                            })
+                            .map((contest) => {
+                              const isBookmarked = !!bookmarkedEvents[contest.id];
+                              const startDate = new Date(contest.start_time);
+                              const isLive = contest.is_live;
+
+                              const formattedDateStr = startDate.toLocaleString('en-IN', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              }) + ' IST';
+
+                              return (
+                                <tr key={contest.id} className="hover:bg-white/[0.02] transition-colors">
+                                  {/* Status */}
+                                  <td className="p-4 font-mono">
+                                    {isLive ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                        LIVE
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-amber-400 font-bold">
+                                        Upcoming
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  {/* Platform */}
+                                  <td className="p-4">
+                                    <span className="font-bold text-white text-xs">{contest.platform}</span>
+                                    <div className="text-[10px] text-white/50 font-mono mt-0.5">{contest.division || 'Rated'}</div>
+                                  </td>
+
+                                  {/* Title & Tags */}
+                                  <td className="p-4">
+                                    <a
+                                      href={contest.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-bold text-white text-sm hover:text-amber-400 transition-colors"
+                                    >
+                                      {contest.title}
+                                    </a>
+                                    <div className="text-xs text-white/50 mt-0.5 line-clamp-1">{contest.description}</div>
+                                  </td>
+
+                                  {/* Date & Time */}
+                                  <td className="p-4 font-mono text-xs text-white/80">
+                                    {formattedDateStr}
+                                  </td>
+
+                                  {/* Duration */}
+                                  <td className="p-4 text-center font-mono text-xs text-white/60">
+                                    {contest.duration}
+                                  </td>
+
+                                  {/* Actions */}
+                                  <td className="p-4 text-right">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBookmarkEvent(contest.id, contest.title)}
+                                        className={`p-1.5 rounded-lg border transition-colors ${
+                                          isBookmarked
+                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                            : 'bg-white/5 text-white/40 hover:text-white border-white/10'
+                                        }`}
+                                        title="Bookmark"
+                                      >
+                                        <Star size={13} className={isBookmarked ? 'fill-amber-400 text-amber-400' : ''} />
+                                      </button>
+                                      <a
+                                        href={getGoogleCalendarUrl(contest)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 text-xs"
+                                        title="Add to Google Calendar"
+                                      >
+                                        <CalendarPlus size={13} />
+                                      </a>
+                                      <a
+                                        href={contest.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-mono text-xs font-bold"
+                                      >
+                                        <span>Go</span>
+                                        <ExternalLink size={11} />
+                                      </a>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
