@@ -24,18 +24,26 @@ const Header = () => {
         </Link>
 
         {!isDashboard && (
-          <nav className="hidden md:flex items-center gap-8 text-sm text-white/70">
+          <nav className="hidden md:flex items-center gap-7 text-sm text-white/70">
+            <Link to="/challenges" className="hover:text-emerald-400 font-medium transition-colors flex items-center gap-1.5">
+              <span>Challenges & Skill Match</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">New</span>
+            </Link>
+            <Link to="/assessment" className="hover:text-white transition-colors">Skill Assessments</Link>
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
             <a href="#portals" className="hover:text-white transition-colors">Portals</a>
-            <a href="#intelligence" className="hover:text-white transition-colors">Intelligence</a>
           </nav>
         )}
 
         <div className="hidden md:flex items-center gap-3">
-          {isDashboard ? (
-            <Link to="/" className="text-sm text-white/70 hover:text-white transition-colors">Sign out</Link>
+          {user ? (
+            <Link to="/dashboard" className="px-5 py-2 rounded-md bg-emerald-400 hover:bg-emerald-300 transition-colors text-black text-sm font-semibold">
+              Go to Dashboard
+            </Link>
           ) : (
-            <Link to="/auth" className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-medium">Login</Link>
+            <Link to="/auth" className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-medium">
+              Login / Sign Up
+            </Link>
           )}
         </div>
 

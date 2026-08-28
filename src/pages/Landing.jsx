@@ -54,8 +54,11 @@ const Landing = () => {
               </p>
 
               <div className="mt-10 flex flex-wrap gap-3">
-                <Link to="/auth" className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-emerald-400 hover:bg-emerald-300 transition-colors text-black font-semibold text-sm">
-                  Start proving skills <ArrowRight size={16} />
+                <Link to="/challenges" className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-emerald-400 hover:bg-emerald-300 transition-colors text-black font-semibold text-sm shadow-lg shadow-emerald-500/20">
+                  <Sparkles size={16} /> Skill Matching Challenges <ArrowRight size={16} />
+                </Link>
+                <Link to="/auth" className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-blue-600 hover:bg-blue-500 transition-colors text-white font-semibold text-sm">
+                  Sign In / Register
                 </Link>
                 <a href="#how-it-works" className="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-white/15 hover:border-white/40 hover:bg-white/5 transition-colors text-white text-sm">
                   View the journey
