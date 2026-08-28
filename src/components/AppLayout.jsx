@@ -5,7 +5,7 @@ import {
   Calendar, Trophy, HelpCircle, MessageSquare, User, LogOut,
   PanelLeft, Flame, Bell, Sparkles, X, ChevronRight, BookOpen,
   ShieldCheck, Zap, Star, Users, PlusCircle, CheckCircle2, Building2,
-  GraduationCap, UserCheck, Award
+  GraduationCap, UserCheck, Award, LifeBuoy
 } from 'lucide-react';
 import { getSession, clearSession } from '../lib/api';
 
@@ -378,19 +378,13 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
             {/* SUPPORT (Shared) */}
             <div className="space-y-1">
               <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                SUPPORT
+                SUPPORT & HELP
               </div>
               <SidebarItem
-                icon={<HelpCircle size={16} />}
-                label="Help Center"
-                active={isNavActive('help')}
-                onClick={() => handleNavClick('help')}
-              />
-              <SidebarItem
-                icon={<MessageSquare size={16} />}
-                label="Feedback"
-                active={isNavActive('feedback')}
-                onClick={() => handleNavClick('feedback')}
+                icon={<LifeBuoy size={16} />}
+                label="Support & Feedback"
+                active={isNavActive('help') || isNavActive('feedback') || isNavActive('support')}
+                onClick={() => handleNavClick('support')}
               />
             </div>
 
@@ -449,6 +443,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                       <SidebarItem icon={<Zap size={16} />} label="Company Challenges" active={location.pathname === '/challenges'} onClick={() => handleNavClick(null, '/challenges')} />
                     </>
                   )}
+                  <SidebarItem icon={<LifeBuoy size={16} />} label="Support & Feedback" active={isNavActive('support') || isNavActive('help')} onClick={() => handleNavClick('support')} />
                 </div>
               </div>
 

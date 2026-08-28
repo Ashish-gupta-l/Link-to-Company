@@ -8,7 +8,9 @@ import {
   Share2, ExternalLink, Code2, Play, Search, Filter, Compass, Clock, Check,
   Lock, Unlock, ChevronLeft, Bell, Star, TrendingUp, Info, Users, PlusCircle,
   X, Loader2, BarChart2, AlertCircle, CheckCircle, FileCode, SlidersHorizontal,
-  RefreshCw, Medal, CalendarPlus, Radio, BookmarkCheck, LayoutGrid, List
+  RefreshCw, Medal, CalendarPlus, Radio, BookmarkCheck, LayoutGrid, List,
+  Send, LifeBuoy, Bug, Lightbulb, MessageSquareQuote, ChevronDown, ChevronUp,
+  Headphones
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import {
@@ -19,7 +21,8 @@ import {
   analyticsApi,
   adminApi,
   leaderboardApi,
-  eventsApi
+  eventsApi,
+  supportApi
 } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { Button } from '../components/ui/button';
@@ -400,6 +403,66 @@ const Dashboard = () => {
     });
   };
 
+  // Codolio Match: Support & Feedback State
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [supportTicketsLoading, setSupportTicketsLoading] = useState(false);
+  const [supportCategory, setSupportCategory] = useState('Bug Report');
+  const [supportPriority, setSupportPriority] = useState('Medium');
+  const [supportSubject, setSupportSubject] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportAttachment, setSupportAttachment] = useState('');
+  const [supportSubmitting, setSupportSubmitting] = useState(false);
+  const [supportActiveTab, setSupportActiveTab] = useState('form');
+  const [submittedTicketId, setSubmittedTicketId] = useState(null);
+  const [expandedFaq, setExpandedFaq] = useState({ 0: true });
+
+  const loadSupportTickets = async () => {
+    setSupportTicketsLoading(true);
+    try {
+      const res = await supportApi.getTickets();
+      setSupportTickets(res.tickets || []);
+    } catch (err) {
+      setSupportTickets([]);
+    } finally {
+      setSupportTicketsLoading(false);
+    }
+  };
+
+  const handleCreateSupportTicket = async (e) => {
+    if (e) e.preventDefault();
+    if (!supportSubject.trim() || !supportMessage.trim()) {
+      toast({ title: 'Please enter a subject and message.', variant: 'destructive' });
+      return;
+    }
+    setSupportSubmitting(true);
+    try {
+      const res = await supportApi.createTicket({
+        category: supportCategory,
+        priority: supportPriority,
+        subject: supportSubject.trim(),
+        message: supportMessage.trim(),
+        attachment_url: supportAttachment.trim()
+      });
+      toast({
+        title: 'Ticket Submitted! 🚀',
+        description: res.message || 'Support ticket created successfully.'
+      });
+      setSubmittedTicketId(res.ticket_id);
+      setSupportSubject('');
+      setSupportMessage('');
+      setSupportAttachment('');
+      loadSupportTickets();
+    } catch (err) {
+      toast({
+        title: 'Failed to Submit Ticket',
+        description: err?.response?.data?.detail || 'Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSupportSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
@@ -483,6 +546,7 @@ const Dashboard = () => {
     dashboardApi.listTalents().then((r) => setTalents(r.talents || [])).catch(() => {});
     loadLeaderboard();
     loadEvents();
+    loadSupportTickets();
 
     if (isStudent) {
       profileApi.getStudentProfile().then((res) => {
@@ -529,6 +593,12 @@ const Dashboard = () => {
       loadEvents(eventPlatformFilter, eventStatusFilter, eventSearch);
     }
   }, [activeTab, eventPlatformFilter, eventStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'help' || activeTab === 'feedback' || activeTab === 'support') {
+      loadSupportTickets();
+    }
+  }, [activeTab]);
 
   // Skill Chip Add & Remove
   const handleAddSkill = (e) => {
@@ -2858,15 +2928,345 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* SHARED VIEW: HELP & FEEDBACK */}
-        {(activeTab === 'help' || activeTab === 'feedback') && (
-          <div className="space-y-6 max-w-2xl">
-            <h1 className="text-2xl font-black text-white">Help Center & Support</h1>
-            <div className="p-6 rounded-xl border border-white/10 bg-[#0b0d14] space-y-4 text-xs text-white/75">
+        {/* SHARED VIEW: SUPPORT & FEEDBACK HUB (CODOLIO MATCH) */}
+        {(activeTab === 'help' || activeTab === 'feedback' || activeTab === 'support') && (
+          <div className="space-y-8 max-w-5xl">
+            {/* Header & Hero */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <strong className="text-white block mb-1">How do I verify skills on LinktoCompany?</strong>
-                <p>Click "Skill Assessments" in the sidebar, select a skill (DSA, JavaScript, SQL, CS Core), and score $\ge 70\%$ to earn a verified badge.</p>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                    <LifeBuoy size={22} />
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                    Support & Feedback Hub
+                  </h1>
+                </div>
+                <p className="text-xs md:text-sm text-white/60 mt-1">
+                  Have questions, feature suggestions, or encountered an issue with LeetCode sync, assessments, or challenges? We're here to help.
+                </p>
               </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href="mailto:support@linktocompany.in"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-mono transition-colors"
+                >
+                  <Send size={13} />
+                  support@linktocompany.in
+                </a>
+              </div>
+            </div>
+
+            {/* Quick Category Action Cards (Codolio Match) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { id: 'Bug Report', label: 'Report a Bug', icon: Bug, color: 'text-rose-400 border-rose-500/20 bg-rose-950/10 hover:border-rose-500/40' },
+                { id: 'Feature Suggestion', label: 'Feature Request', icon: Lightbulb, color: 'text-amber-400 border-amber-500/20 bg-amber-950/10 hover:border-amber-500/40' },
+                { id: 'LeetCode Sync Issue', label: 'LeetCode Sync', icon: Code2, color: 'text-orange-400 border-orange-500/20 bg-orange-950/10 hover:border-orange-500/40' },
+                { id: 'Challenge / Assessment', label: 'Challenges & Quiz', icon: Trophy, color: 'text-emerald-400 border-emerald-500/20 bg-emerald-950/10 hover:border-emerald-500/40' },
+                { id: 'College / Recruiter', label: 'Partnership Query', icon: Building2, color: 'text-blue-400 border-blue-500/20 bg-blue-950/10 hover:border-blue-500/40' }
+              ].map((cat) => {
+                const Icon = cat.icon;
+                const active = supportCategory === cat.id && supportActiveTab === 'form';
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSupportCategory(cat.id);
+                      setSupportActiveTab('form');
+                    }}
+                    className={`p-4 rounded-2xl border text-left transition-all space-y-2 ${cat.color} ${
+                      active ? 'ring-2 ring-white/30 border-white bg-white/10' : ''
+                    }`}
+                  >
+                    <Icon size={20} />
+                    <div className="font-bold text-white text-xs">{cat.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sub-Tabs: Form, FAQ, My Tickets */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+                {[
+                  { id: 'form', label: 'Submit Support Ticket', icon: Send },
+                  { id: 'faq', label: 'Frequently Asked Questions', icon: HelpCircle },
+                  { id: 'tickets', label: `My Tickets (${supportTickets.length})`, icon: MessageSquareQuote }
+                ].map((tb) => {
+                  const Icon = tb.icon;
+                  const active = supportActiveTab === tb.id;
+                  return (
+                    <button
+                      key={tb.id}
+                      type="button"
+                      onClick={() => setSupportActiveTab(tb.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-medium transition-all ${
+                        active
+                          ? 'bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/20'
+                          : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <Icon size={14} />
+                      {tb.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* TAB 1: SUPPORT & FEEDBACK FORM */}
+              {supportActiveTab === 'form' && (
+                <div className="grid lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-8 rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-5 shadow-2xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                      <div>
+                        <h3 className="font-bold text-white text-base">Submit a Support Request</h3>
+                        <p className="text-xs text-white/50">Our engineering & mentorship team responds within 24 hours.</p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono">
+                        {supportCategory}
+                      </span>
+                    </div>
+
+                    {submittedTicketId && (
+                      <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 flex items-center justify-between gap-3 text-xs">
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-emerald-400">✓ Ticket Created: #{submittedTicketId}</div>
+                          <div className="text-white/70">You can track resolution progress under the 'My Tickets' tab.</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSubmittedTicketId(null)}
+                          className="text-white/40 hover:text-white"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleCreateSupportTicket} className="space-y-4 text-xs">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-white/70">Category</Label>
+                          <select
+                            value={supportCategory}
+                            onChange={(e) => setSupportCategory(e.target.value)}
+                            className="mt-1 w-full bg-[#07080d] border border-white/10 rounded-md p-2 text-white text-xs"
+                          >
+                            <option>Bug Report</option>
+                            <option>Feature Suggestion</option>
+                            <option>LeetCode Sync Issue</option>
+                            <option>Challenge / Assessment</option>
+                            <option>College / Recruiter</option>
+                            <option>Account / Login</option>
+                            <option>General Query</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <Label className="text-white/70">Priority Level</Label>
+                          <select
+                            value={supportPriority}
+                            onChange={(e) => setSupportPriority(e.target.value)}
+                            className="mt-1 w-full bg-[#07080d] border border-white/10 rounded-md p-2 text-white text-xs"
+                          >
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                            <option>Urgent 🚨</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-white/70">Subject / Title</Label>
+                        <Input
+                          placeholder="e.g. My LeetCode rating did not update on the campus leaderboard"
+                          value={supportSubject}
+                          onChange={(e) => setSupportSubject(e.target.value)}
+                          required
+                          className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-white/70">Detailed Description / Steps to Reproduce</Label>
+                        <textarea
+                          rows={5}
+                          placeholder="Please provide details about what happened, error messages, or ideas for improvements..."
+                          value={supportMessage}
+                          onChange={(e) => setSupportMessage(e.target.value)}
+                          required
+                          className="mt-1 w-full bg-[#07080d] border border-white/10 rounded-md p-3 text-white text-xs focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-white/70">Screenshot / Attachment Link (Optional)</Label>
+                        <Input
+                          placeholder="https://imgur.com/... or Google Drive link"
+                          value={supportAttachment}
+                          onChange={(e) => setSupportAttachment(e.target.value)}
+                          className="mt-1 bg-[#07080d] border-white/10 text-white text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          type="submit"
+                          disabled={supportSubmitting}
+                          className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs px-6 py-2"
+                        >
+                          {supportSubmitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Send size={14} className="mr-1.5" />}
+                          Submit Ticket
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Sidebar Info & Channels */}
+                  <div className="lg:col-span-4 space-y-4">
+                    <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-5 space-y-4 text-xs">
+                      <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                        <Headphones size={16} className="text-cyan-400" /> Direct Support Channels
+                      </h4>
+                      <div className="space-y-3 text-white/70">
+                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+                          <div className="font-bold text-white">Email Engineering Desk</div>
+                          <div className="font-mono text-cyan-300">support@linktocompany.in</div>
+                          <div className="text-[11px] text-white/40">Response within 24h</div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+                          <div className="font-bold text-white">Campus Innovation Hub</div>
+                          <div className="text-white/60">SLRTCE Innovation Cell, Mumbai</div>
+                          <div className="text-[11px] text-white/40">Mon - Fri · 9:00 AM - 6:00 PM IST</div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+                          <div className="font-bold text-white">Live AI Career Copilot</div>
+                          <div className="text-white/60">Ask questions regarding DSA roadmaps or skill assessments.</div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('copilot')}
+                            className="mt-1 inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-mono text-[11px]"
+                          >
+                            <span>Launch AI Copilot</span>
+                            <ArrowUpRight size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: FREQUENTLY ASKED QUESTIONS (CODOLIO MATCH) */}
+              {supportActiveTab === 'faq' && (
+                <div className="space-y-4">
+                  {[
+                    {
+                      q: 'How does LeetCode profile sync and the Campus Leaderboard work?',
+                      a: 'When you link your LeetCode username (e.g. ashish_gupta) on the Campus Leaderboard or Portfolio tab, our system queries the official LeetCode GraphQL API in real-time. It pulls your Contest Rating, Global Ranking, and solved problem counts (Easy, Medium, Hard) and dynamically computes your university rank.'
+                    },
+                    {
+                      q: 'How are Skill-to-Challenge Match Scores calculated?',
+                      a: 'Our transparent matching algorithm matches your verified assessment skills and claimed profile technologies against company challenge requirements: Match Score = (Matched Required Skills / Total Required Skills) * 100. Any missing skills are flagged in red under "Your Skill Gap" with a 4-step roadmap.'
+                    },
+                    {
+                      q: 'How do I export contests to Google Calendar from the Event Tracker?',
+                      a: 'In the Event Tracker tab, click the Calendar Plus icon on any LeetCode, Codeforces, or CodeChef contest card. This opens a pre-configured Google Calendar event with the contest title, duration, and direct registration link.'
+                    },
+                    {
+                      q: 'What are the criteria for receiving an Internship or PPO offer?',
+                      a: 'Verified partner companies (ABC Technologies, TechVedika, Innovex Labs) evaluate submissions using a 5-criteria weighted rubric: Technical Accuracy (30%), Problem Solving (25%), Code Quality (20%), Innovation (15%), and Communication (10%). Top submissions qualify for fast-track interview invites.'
+                    },
+                    {
+                      q: 'How does anti-cheat proctoring work during Skill Assessments?',
+                      a: 'Assessments operate with client-side proctoring tracking fullscreen exits, tab switches, paste velocity, and devtools access. Maintaining an integrity score >= 70% qualifies you for a Verified Skill Badge on your profile and Campus Leaderboard.'
+                    },
+                    {
+                      q: 'Can colleges track their overall department placement readiness?',
+                      a: 'Yes! Department heads and TPO administrators can access the Campus Analytics tab to view student enrollment, skill gap matrices comparing industry demand vs. student supply, and download accreditation reports.'
+                    }
+                  ].map((faq, idx) => {
+                    const isOpen = expandedFaq[idx];
+                    return (
+                      <div
+                        key={faq.q}
+                        className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setExpandedFaq({ ...expandedFaq, [idx]: !isOpen })}
+                          className="w-full p-5 text-left flex items-center justify-between gap-4 hover:bg-white/[0.02]"
+                        >
+                          <span className="font-bold text-white text-sm">{faq.q}</span>
+                          <span className="text-white/40">{isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+                        </button>
+                        {isOpen && (
+                          <div className="p-5 pt-0 text-xs text-white/70 border-t border-white/5 bg-black/20 leading-relaxed font-sans">
+                            {faq.a}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* TAB 3: MY SUPPORT TICKETS (CODOLIO MATCH) */}
+              {supportActiveTab === 'tickets' && (
+                <div className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden shadow-2xl">
+                  {supportTicketsLoading ? (
+                    <div className="p-16 text-center space-y-3">
+                      <Loader2 size={32} className="animate-spin text-cyan-400 mx-auto" />
+                      <p className="text-xs text-white/60 font-mono">Loading your support tickets...</p>
+                    </div>
+                  ) : supportTickets.length === 0 ? (
+                    <div className="p-16 text-center space-y-3">
+                      <MessageSquareQuote size={36} className="text-white/20 mx-auto" />
+                      <p className="text-sm font-bold text-white">No support tickets submitted yet</p>
+                      <p className="text-xs text-white/50">Submit a support request using the form tab if you need assistance.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/[0.04]">
+                      {supportTickets.map((t) => (
+                        <div key={t.id} className="p-5 space-y-2 hover:bg-white/[0.02] transition-colors">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-white text-xs">{t.id}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[10px] font-mono">
+                                {t.category}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono border ${
+                                t.priority === 'Urgent 🚨' || t.priority === 'Urgent'
+                                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                  : t.priority === 'High'
+                                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                  : 'bg-white/10 text-white/60 border-white/10'
+                              }`}>
+                                {t.priority}
+                              </span>
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-mono">
+                              {t.status || 'In Review'}
+                            </span>
+                          </div>
+
+                          <h4 className="font-bold text-white text-sm">{t.subject}</h4>
+                          <p className="text-xs text-white/70">{t.message}</p>
+                          <div className="text-[10px] text-white/40 font-mono pt-1">
+                            Submitted: {new Date(t.created_at).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

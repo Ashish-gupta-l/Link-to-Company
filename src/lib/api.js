@@ -68,6 +68,11 @@ export const eventsApi = {
   list: (params = {}) => api.get('/events', { params }).then((r) => r.data),
 };
 
+export const supportApi = {
+  createTicket: (data) => api.post('/support/tickets', data).then((r) => r.data),
+  getTickets: () => api.get('/support/tickets').then((r) => r.data),
+};
+
 export const adminApi = {
   getVerifications: () => api.get('/admin/verifications').then((r) => r.data),
   verifyCompany: (userId, status) => api.post('/admin/verify-company', { user_id: userId, status }).then((r) => r.data),

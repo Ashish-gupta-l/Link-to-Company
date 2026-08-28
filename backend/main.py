@@ -697,6 +697,24 @@ def init_db():
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS support_tickets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        user_email TEXT NOT NULL,
+        category TEXT NOT NULL,
+        priority TEXT DEFAULT 'Medium',
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        attachment_url TEXT DEFAULT '',
+        status TEXT DEFAULT 'In Review',
+        admin_response TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """)
+
     # ----------------- Rich Seed Data -----------------
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1129,6 +1147,16 @@ class VerifyChallengeRequest(BaseModel):
 class CopilotChatRequest(BaseModel):
     session_id: str
     message: str
+
+class CreateSupportTicketRequest(BaseModel):
+    category: str
+    priority: Optional[str] = "Medium"
+    subject: str
+    message: str
+    attachment_url: Optional[str] = ""
+
+    class Config:
+        extra = "ignore"
 
 # ----------------- Authentication Endpoints -----------------
 @app.post("/api/auth/send-otp")
@@ -1849,6 +1877,48 @@ def get_contest_events(
         "live_count": len([e for e in events_raw if e.get("is_live")]),
         "upcoming_count": len([e for e in events_raw if not e.get("is_live")])
     }
+
+# ----------------- Support & Feedback Tickets (Codolio Match) -----------------
+@app.post("/api/support/tickets")
+def create_support_ticket(req: CreateSupportTicketRequest, user: dict = Depends(get_current_user)):
+    if not req.subject.strip() or not req.message.strip():
+        raise HTTPException(status_code=400, detail="Please provide a subject and message for your support request.")
+    
+    ticket_id = f"TICKET-LTC-{random.randint(1000, 9999)}"
+    now = datetime.now(timezone.utc).isoformat()
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO support_tickets (
+        id, user_id, user_name, user_email, category, priority, subject, message, attachment_url, status, admin_response, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'In Review', '', ?, ?)
+    """, (
+        ticket_id, user["id"], user["name"], user["email"],
+        req.category or "General Query", req.priority or "Medium",
+        req.subject.strip(), req.message.strip(),
+        req.attachment_url or "", now, now
+    ))
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "ticket_id": ticket_id,
+        "message": f"Support ticket #{ticket_id} created successfully! Our engineering team will review it shortly."
+    }
+
+@app.get("/api/support/tickets")
+def get_support_tickets(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    cursor = conn.cursor()
+    if user.get("role") == "Admin":
+        cursor.execute("SELECT * FROM support_tickets ORDER BY created_at DESC")
+    else:
+        cursor.execute("SELECT * FROM support_tickets WHERE user_id = ? ORDER BY created_at DESC", (user["id"],))
+    rows = cursor.fetchall()
+    conn.close()
+    return {"tickets": [dict(r) for r in rows]}
 
 @app.get("/api/profile/company")
 def get_company_profile(user: dict = Depends(get_current_user)):
