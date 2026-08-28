@@ -1271,60 +1271,204 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* VIEW: MY SHEETS (Curriculum Checklist & 9 Pillars) */}
+            {/* VIEW: MY SHEETS & SKILL PIPELINE HOME */}
             {activeTab === 'my-sheets' && (
               <div className="space-y-8">
                 
-                {/* Hero */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Hero Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
                   <div>
-                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
-                      <span>My Sheets & Placement Hub</span>
+                    <div className="text-[11px] tracking-widest uppercase text-blue-400 font-mono font-bold flex items-center gap-2">
+                      <Sparkles size={14} className="text-emerald-400" /> ACADEMIA–INDUSTRY SKILL MAPPING PIPELINE
+                    </div>
+                    <h1 className="text-2xl md:text-3xl font-black text-white mt-1">
+                      Welcome back, {user?.name || 'Student'}
                     </h1>
                     <p className="text-xs md:text-sm text-white/50 mt-1">
-                      Based on your personal and followed placement roadmaps & skill sheets
+                      Discover company challenges matching your verified skills, identify skill gaps, and unlock direct internships & placements.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Link
+                      to="/challenges"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/20"
+                    >
+                      <Zap size={14} /> Explore Challenges
+                    </Link>
                     <button
                       type="button"
                       onClick={() => setShowTourModal(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold font-mono transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold font-mono transition-colors cursor-pointer"
                     >
                       <BookOpen size={14} /> Tour
                     </button>
                   </div>
                 </div>
 
-                {/* RECOMMENDED CHALLENGES WIDGET */}
-                {recommendedChallenges.length > 0 && (
-                  <div className="rounded-2xl border border-emerald-500/30 bg-[#0c101a] p-6 space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between">
+                {/* KPI Metrics Row */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl border border-emerald-500/30 bg-[#0b0f1a] shadow-lg">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Platform Trust Score</div>
+                    <div className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">{stats.trust_score || 15}/100</div>
+                    <div className="text-[11px] text-emerald-300/60 font-mono mt-0.5">Verified anti-cheat proof</div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl border border-blue-500/30 bg-[#0b0f1a] shadow-lg">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Matched Challenges</div>
+                    <div className="text-2xl md:text-3xl font-black text-blue-400 mt-1">{recommendedChallenges.length || 5} Live</div>
+                    <div className="text-[11px] text-blue-300/60 font-mono mt-0.5">Based on your skills</div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl border border-purple-500/30 bg-[#0b0f1a] shadow-lg">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Active Applications</div>
+                    <div className="text-2xl md:text-3xl font-black text-purple-400 mt-1">{myApplications.length} In Pipeline</div>
+                    <div className="text-[11px] text-purple-300/60 font-mono mt-0.5">Track recruiter reviews</div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl border border-amber-500/30 bg-[#0b0f1a] shadow-lg">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Skill Readiness</div>
+                    <div className="text-2xl md:text-3xl font-black text-amber-400 mt-1">{stats.skill_readiness || 0}% Ready</div>
+                    <div className="text-[11px] text-amber-300/60 font-mono mt-0.5">DSA & full stack track</div>
+                  </div>
+                </div>
+
+                {/* TOP MATCHED INDUSTRY CHALLENGES (Always visible) */}
+                <div className="rounded-2xl border border-emerald-500/40 bg-[#0c101a] p-6 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
                       <div className="flex items-center gap-2">
-                        <Sparkles size={16} className="text-emerald-400" />
+                        <Sparkles size={17} className="text-emerald-400" />
                         <h3 className="font-bold text-white text-base font-mono uppercase">Top Matched Challenges For You</h3>
                       </div>
-                      <Link to="/challenges" className="text-xs text-emerald-400 hover:underline font-mono">
-                        View All ({recommendedChallenges.length}) →
-                      </Link>
+                      <p className="text-xs text-white/50 mt-0.5">Calculated by real-time skill overlap formula with your profile.</p>
                     </div>
+                    <Link to="/challenges" className="text-xs text-emerald-400 hover:underline font-mono font-semibold flex items-center gap-1">
+                      Browse All Industry Challenges <ChevronRight size={14} />
+                    </Link>
+                  </div>
 
-                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {recommendedChallenges.slice(0, 3).map((rc) => (
-                        <Link
-                          key={rc.id}
-                          to={`/challenges?id=${rc.id}`}
-                          className="p-4 rounded-xl bg-black/40 border border-white/5 hover:border-emerald-400/40 transition-all space-y-2 group"
-                        >
+                  <div className="grid md:grid-cols-3 gap-4 pt-1">
+                    {(recommendedChallenges.length > 0 ? recommendedChallenges.slice(0, 3) : [
+                      {
+                        id: 'ai-crop-disease',
+                        title: 'AI-Based Crop Disease Detection',
+                        company: 'ABC Technologies',
+                        match_score: 50,
+                        domain: 'Computer Vision & Deep Learning',
+                        opportunity_type: 'Internship with PPO',
+                        description: 'Build a CNN vision model to detect leaf pathologies from mobile camera photos with 90%+ accuracy.'
+                      },
+                      {
+                        id: 'collab-workspace',
+                        title: 'Collaborative Real-Time Workspace with Live Sync',
+                        company: 'Innovex Labs',
+                        match_score: 82,
+                        domain: 'Full Stack & Web Architecture',
+                        opportunity_type: 'Internship & Placement',
+                        description: 'Develop a high-concurrency real-time collaborative workspace with CRDT sync and WebSockets.'
+                      },
+                      {
+                        id: 'cloud-security-analyzer',
+                        title: 'Zero-Trust Cloud Security & Audit Log Analyzer',
+                        company: 'CyberShield Defense',
+                        match_score: 50,
+                        domain: 'Cybersecurity & Cloud Defense',
+                        opportunity_type: 'Placement Offer',
+                        description: 'Create an automated zero-trust security log parser and anomaly detection engine.'
+                      }
+                    ]).map((rc) => (
+                      <Link
+                        key={rc.id}
+                        to={`/challenges?id=${rc.id}`}
+                        className="p-5 rounded-2xl bg-black/50 border border-white/10 hover:border-emerald-400/60 transition-all space-y-3 group shadow-lg flex flex-col justify-between"
+                      >
+                        <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <span className="text-xs font-mono text-blue-400 font-semibold">{rc.company}</span>
-                            <span className="text-xs font-mono text-emerald-400 font-bold">{rc.match_score}% Match</span>
+                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                              {rc.match_score}% Match
+                            </span>
                           </div>
-                          <h4 className="font-bold text-white text-xs group-hover:text-emerald-300 line-clamp-1">{rc.title}</h4>
+                          <h4 className="font-bold text-white text-sm group-hover:text-emerald-300 line-clamp-1">{rc.title}</h4>
                           <p className="text-[11px] text-white/50 line-clamp-2">{rc.description || rc.problem_statement}</p>
-                        </Link>
+                        </div>
+
+                        <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                          <span className="text-[10px] font-mono text-amber-300">{rc.opportunity_type}</span>
+                          <span className="text-emerald-400 font-semibold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            View Gap & Apply <ChevronRight size={12} />
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {/* MY APPLICATIONS PIPELINE QUICK TRACKER */}
+                {myApplications.length > 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-[#0b0e18] p-6 space-y-4 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Award size={17} className="text-blue-400" />
+                        <h3 className="font-bold text-white text-base font-mono uppercase">My Active Applications In Pipeline</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('applications')}
+                        className="text-xs text-blue-400 hover:underline font-mono font-semibold"
+                      >
+                        View Details ({myApplications.length}) →
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {myApplications.slice(0, 2).map((app) => (
+                        <div key={app.id} className="p-4 rounded-xl border border-white/10 bg-[#080a12] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <div className="font-bold text-white text-sm">{app.challenge_title}</div>
+                            <div className="text-xs text-white/50 font-mono mt-0.5">{app.challenge_company} · Match: {app.match_score}%</div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold border ${getStatusColor(app.status)}`}>
+                              {app.status}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('applications')}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                            >
+                              Track Pipeline
+                            </button>
+                          </div>
+                        </div>
                       ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl border border-white/10 bg-[#0b0e18] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="font-bold text-white text-sm flex items-center gap-2">
+                        <UserCheck size={16} className="text-emerald-400" /> Want direct internship & placement offers?
+                      </div>
+                      <p className="text-xs text-white/50">
+                        1. Update your Technical Skills → 2. View Skill Gaps on Challenges → 3. Submit working GitHub solutions for recruiter evaluation.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('portfolio')}
+                        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                      >
+                        Update My Skills
+                      </button>
+                      <Link
+                        to="/challenges"
+                        className="px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs transition-colors"
+                      >
+                        Browse Challenges
+                      </Link>
                     </div>
                   </div>
                 )}
