@@ -59,6 +59,11 @@ export const analyticsApi = {
   college: () => api.get('/analytics/college').then((r) => r.data),
 };
 
+export const leaderboardApi = {
+  get: (params = {}) => api.get('/leaderboard', { params }).then((r) => r.data),
+  syncLeetcode: (username) => api.post('/profile/leetcode/sync', { username }).then((r) => r.data),
+};
+
 export const adminApi = {
   getVerifications: () => api.get('/admin/verifications').then((r) => r.data),
   verifyCompany: (userId, status) => api.post('/admin/verify-company', { user_id: userId, status }).then((r) => r.data),
