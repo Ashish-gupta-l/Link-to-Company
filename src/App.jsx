@@ -39,9 +39,14 @@ class ErrorBoundary extends Component {
             ⚠️
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Something went wrong</h1>
-          <p className="text-xs text-white/50 max-w-md mb-6">
+          <p className="text-xs text-white/50 max-w-md mb-3">
             An unexpected error occurred while loading this view. You can reload the page or reset your session.
           </p>
+          {this.state.error?.message && (
+            <div className="mb-6 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 font-mono text-[11px] max-w-md break-all">
+              {this.state.error.message}
+            </div>
+          )}
           <div className="flex gap-3">
             <button
               onClick={() => window.location.reload()}

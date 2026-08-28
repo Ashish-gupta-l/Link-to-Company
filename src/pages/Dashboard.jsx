@@ -548,12 +548,12 @@ const Dashboard = () => {
   };
 
   const totalTopicsCount = DEFAULT_ROADMAP.reduce((acc, p) => acc + p.topics.length, 0);
-  const completedTopicsCount = stats.completed_topics?.length || 0;
-  const selectedCompany = COMPANY_SHEETS[selectedCompanyId];
+  const completedTopicsCount = stats?.completed_topics?.length || 0;
+  const selectedCompany = selectedCompanyId ? COMPANY_SHEETS[selectedCompanyId] : null;
 
   // Recruiter applicant filtering
   const filteredApplicants = useMemo(() => {
-    return applicantsList.filter((a) => {
+    return (applicantsList || []).filter((a) => {
       if (applicantFilterStatus !== 'All' && a.status !== applicantFilterStatus) return false;
       if (applicantMinMatch > 0 && (a.match_score || 0) < applicantMinMatch) return false;
       return true;
@@ -1310,25 +1310,25 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="p-5 rounded-2xl border border-emerald-500/30 bg-[#0b0f1a] shadow-lg">
                     <div className="text-[11px] text-white/40 font-mono uppercase">Platform Trust Score</div>
-                    <div className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">{stats.trust_score || 15}/100</div>
+                    <div className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">{stats?.trust_score ?? 15}/100</div>
                     <div className="text-[11px] text-emerald-300/60 font-mono mt-0.5">Verified anti-cheat proof</div>
                   </div>
 
                   <div className="p-5 rounded-2xl border border-blue-500/30 bg-[#0b0f1a] shadow-lg">
                     <div className="text-[11px] text-white/40 font-mono uppercase">Matched Challenges</div>
-                    <div className="text-2xl md:text-3xl font-black text-blue-400 mt-1">{recommendedChallenges.length || 5} Live</div>
+                    <div className="text-2xl md:text-3xl font-black text-blue-400 mt-1">{(recommendedChallenges || []).length || 5} Live</div>
                     <div className="text-[11px] text-blue-300/60 font-mono mt-0.5">Based on your skills</div>
                   </div>
 
                   <div className="p-5 rounded-2xl border border-purple-500/30 bg-[#0b0f1a] shadow-lg">
                     <div className="text-[11px] text-white/40 font-mono uppercase">Active Applications</div>
-                    <div className="text-2xl md:text-3xl font-black text-purple-400 mt-1">{myApplications.length} In Pipeline</div>
+                    <div className="text-2xl md:text-3xl font-black text-purple-400 mt-1">{(myApplications || []).length} In Pipeline</div>
                     <div className="text-[11px] text-purple-300/60 font-mono mt-0.5">Track recruiter reviews</div>
                   </div>
 
                   <div className="p-5 rounded-2xl border border-amber-500/30 bg-[#0b0f1a] shadow-lg">
                     <div className="text-[11px] text-white/40 font-mono uppercase">Skill Readiness</div>
-                    <div className="text-2xl md:text-3xl font-black text-amber-400 mt-1">{stats.skill_readiness || 0}% Ready</div>
+                    <div className="text-2xl md:text-3xl font-black text-amber-400 mt-1">{stats?.skill_readiness ?? 0}% Ready</div>
                     <div className="text-[11px] text-amber-300/60 font-mono mt-0.5">DSA & full stack track</div>
                   </div>
                 </div>
@@ -1406,7 +1406,7 @@ const Dashboard = () => {
                 </div>
 
                 {/* MY APPLICATIONS PIPELINE QUICK TRACKER */}
-                {myApplications.length > 0 ? (
+                {(myApplications || []).length > 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-[#0b0e18] p-6 space-y-4 shadow-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1418,12 +1418,12 @@ const Dashboard = () => {
                         onClick={() => setActiveTab('applications')}
                         className="text-xs text-blue-400 hover:underline font-mono font-semibold"
                       >
-                        View Details ({myApplications.length}) →
+                        View Details ({(myApplications || []).length}) →
                       </button>
                     </div>
 
                     <div className="space-y-3">
-                      {myApplications.slice(0, 2).map((app) => (
+                      {(myApplications || []).slice(0, 2).map((app) => (
                         <div key={app.id} className="p-4 rounded-xl border border-white/10 bg-[#080a12] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div>
                             <div className="font-bold text-white text-sm">{app.challenge_title}</div>
@@ -1505,19 +1505,19 @@ const Dashboard = () => {
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs font-mono">
                           <span className="text-white/60">Skill Readiness</span>
-                          <span className="text-emerald-400 font-bold">{stats.skill_readiness}% Ready</span>
+                          <span className="text-emerald-400 font-bold">{stats?.skill_readiness ?? 0}% Ready</span>
                         </div>
                         <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-500"
-                            style={{ width: `${stats.skill_readiness}%` }}
+                            style={{ width: `${stats?.skill_readiness ?? 0}%` }}
                           ></div>
                         </div>
                       </div>
 
                       <div className="pt-2 border-t border-white/10 flex items-center justify-between">
                         <span className="text-[11px] font-mono text-white/40">
-                          Trust Score: <strong className="text-white">{stats.trust_score}/100</strong>
+                          Trust Score: <strong className="text-white">{stats?.trust_score ?? 15}/100</strong>
                         </span>
                         <a
                           href="#roadmap-table"
@@ -1575,7 +1575,7 @@ const Dashboard = () => {
 
                   <div className="space-y-4">
                     {DEFAULT_ROADMAP.map((pillar) => {
-                      const completedInPillar = pillar.topics.filter((t) => stats.completed_topics?.includes(t.name)).length;
+                      const completedInPillar = pillar.topics.filter((t) => stats?.completed_topics?.includes(t.name)).length;
                       const isAllDone = completedInPillar === pillar.topics.length;
 
                       return (
@@ -1603,7 +1603,7 @@ const Dashboard = () => {
 
                           <div className="divide-y divide-white/[0.04]">
                             {pillar.topics.map((item) => {
-                              const isDone = stats.completed_topics?.includes(item.name);
+                              const isDone = stats?.completed_topics?.includes(item.name);
                               return (
                                 <div
                                   key={item.name}
@@ -1822,9 +1822,9 @@ const Dashboard = () => {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="rounded-xl border border-white/10 bg-[#0b0d14] p-5 space-y-3">
                     <h3 className="font-bold text-white text-base flex items-center gap-2">
-                      <Calendar size={16} className="text-emerald-400" /> Scheduled Interviews ({stats.interviews?.length || 0})
+                      <Calendar size={16} className="text-emerald-400" /> Scheduled Interviews ({stats?.interviews?.length || 0})
                     </h3>
-                    {stats.interviews?.length > 0 ? (
+                    {stats?.interviews?.length > 0 ? (
                       stats.interviews.map((iv) => (
                         <div key={iv.id} className="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 space-y-1 text-xs">
                           <div className="font-bold text-white">{iv.role_title} ({iv.company_name})</div>
