@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   CheckCircle2, Circle, ArrowUpRight, Sparkles, Trophy, Target, BookOpen,
@@ -6,10 +6,18 @@ import {
   GraduationCap, Award, CheckSquare, Square, ChevronRight, UserCheck,
   Flame, HelpCircle, FileText, Globe, Layers, Laptop, Edit3, Bookmark,
   Share2, ExternalLink, Code2, Play, Search, Filter, Compass, Clock, Check,
-  Lock, Unlock, ChevronLeft, Bell, Star, TrendingUp, Info, Users, PlusCircle
+  Lock, Unlock, ChevronLeft, Bell, Star, TrendingUp, Info, Users, PlusCircle,
+  X, Loader2, BarChart2, AlertCircle, CheckCircle, FileCode, SlidersHorizontal
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
-import { getSession, dashboardApi } from '../lib/api';
+import {
+  getSession,
+  dashboardApi,
+  profileApi,
+  challengeApi,
+  analyticsApi,
+  adminApi
+} from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -98,211 +106,136 @@ const COMPANY_SHEETS = {
   },
   meta: {
     id: 'meta',
-    name: 'Meta',
+    name: 'Meta (Facebook)',
     tag: 'MAANG',
-    logoColor: 'text-blue-400',
-    desc: "Target Meta interviews smartly with this handpicked list of DSA questions focusing on high-speed execution, two-pointers, and graph traversals.",
+    logoColor: 'text-blue-500',
+    desc: "Meta interview sheet focusing on speed, clean code, edge cases, and high-frequency algorithms (Strings, Trees, Sliding Window).",
     lastUpdated: '1 day ago',
-    totalProblems: 195,
-    difficulty: { easy: 20, medium: 135, hard: 40 },
+    totalProblems: 190,
+    difficulty: { easy: 20, medium: 130, hard: 40 },
     patterns: [
-      { name: 'Strings & HashMaps', percentage: '28.50%', count: '55', color: '#f97316' },
-      { name: 'Binary Trees & Graphs', percentage: '22.00%', count: '43', color: '#3b82f6' },
-      { name: 'Two Pointers & Arrays', percentage: '18.30%', count: '36', color: '#22c55e' }
+      { name: 'Trees and BST', percentage: '28.10%', count: '53', color: '#f97316' },
+      { name: 'Strings and Recursion', percentage: '22.00%', count: '42', color: '#3b82f6' },
+      { name: 'Two Pointers & Sliding Window', percentage: '18.40%', count: '35', color: '#10b981' }
     ],
     questions: [
-      { id: 1, title: 'Kth Largest Element in an Array', diff: 'Medium', topic: 'QuickSelect / Heap', link: 'https://leetcode.com/problems/kth-largest-element-in-an-array/' },
-      { id: 2, title: 'Minimum Remove to Make Valid Parentheses', diff: 'Medium', topic: 'Stack', link: 'https://leetcode.com/problems/minimum-remove-to-make-valid-parentheses/' },
-      { id: 3, title: 'Lowest Common Ancestor in Binary Tree', diff: 'Medium', topic: 'Binary Tree', link: 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/' },
-      { id: 4, title: 'Subarray Sum Equals K', diff: 'Medium', topic: 'Prefix Sum + HashMap', link: 'https://leetcode.com/problems/subarray-sum-equals-k/' }
-    ]
-  },
-  bloomberg: {
-    id: 'bloomberg',
-    name: 'Bloomberg',
-    tag: 'FinTech',
-    logoColor: 'text-purple-400',
-    desc: "Crack Bloomberg's challenging interviews with this collection of high-frequency data streaming, design, and algorithmic questions.",
-    lastUpdated: '4 days ago',
-    totalProblems: 180,
-    difficulty: { easy: 25, medium: 120, hard: 35 },
-    patterns: [
-      { name: 'Stacks & Queues', percentage: '25.00%', count: '45', color: '#f97316' },
-      { name: 'Design Problems', percentage: '20.00%', count: '36', color: '#3b82f6' },
-      { name: 'Two Pointers & Heaps', percentage: '18.00%', count: '32', color: '#22c55e' }
-    ],
-    questions: [
-      { id: 1, title: 'Design Leaderboard', diff: 'Medium', topic: 'HashMap + Heap', link: 'https://leetcode.com/problems/design-a-leaderboard/' },
-      { id: 2, title: 'Decode String', diff: 'Medium', topic: 'Stack', link: 'https://leetcode.com/problems/decode-string/' },
-      { id: 3, title: 'Two City Scheduling', diff: 'Medium', topic: 'Greedy', link: 'https://leetcode.com/problems/two-city-scheduling/' }
+      { id: 1, title: 'Valid Palindrome II', diff: 'Easy', topic: 'Two Pointers', link: 'https://leetcode.com/problems/valid-palindrome-ii/' },
+      { id: 2, title: 'Lowest Common Ancestor of a Binary Tree', diff: 'Medium', topic: 'Tree DFS', link: 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/' },
+      { id: 3, title: 'Continuous Subarray Sum', diff: 'Medium', topic: 'Math / Prefix Sum', link: 'https://leetcode.com/problems/continuous-subarray-sum/' },
+      { id: 4, title: 'Kth Largest Element in an Array', diff: 'Medium', topic: 'QuickSelect / Heap', link: 'https://leetcode.com/problems/kth-largest-element-in-an-array/' }
     ]
   },
   apple: {
     id: 'apple',
     name: 'Apple',
-    tag: 'Hardware/OS',
-    logoColor: 'text-gray-300',
-    desc: "Strengthen your coding prep with Apple-specific DSA questions prioritizing robust memory management, matrix traversals, and clean recursion.",
-    lastUpdated: '6 days ago',
-    totalProblems: 170,
-    difficulty: { easy: 30, medium: 110, hard: 30 },
+    tag: 'MAANG',
+    logoColor: 'text-slate-300',
+    desc: "Targeted problem set focusing on system performance, recursion, binary search, and data structure internals for Apple hardware/software engineering roles.",
+    lastUpdated: '4 days ago',
+    totalProblems: 160,
+    difficulty: { easy: 25, medium: 105, hard: 30 },
     patterns: [
-      { name: 'Arrays & Math', percentage: '24.00%', count: '41', color: '#f97316' },
-      { name: 'Trees & Linked Lists', percentage: '22.00%', count: '37', color: '#3b82f6' },
-      { name: 'Dynamic Programming', percentage: '15.00%', count: '25', color: '#eab308' }
+      { name: 'Arrays & Math', percentage: '30.00%', count: '48', color: '#f97316' },
+      { name: 'Linked Lists & Caching', percentage: '25.00%', count: '40', color: '#3b82f6' }
     ],
     questions: [
-      { id: 1, title: 'Spiral Matrix', diff: 'Medium', topic: 'Matrix Traversal', link: 'https://leetcode.com/problems/spiral-matrix/' },
-      { id: 2, title: 'Valid Sudoku', diff: 'Medium', topic: 'HashMap / Matrix', link: 'https://leetcode.com/problems/valid-sudoku/' },
-      { id: 3, title: 'Coin Change', diff: 'Medium', topic: 'Dynamic Programming', link: 'https://leetcode.com/problems/coin-change/' }
+      { id: 1, title: 'Two Sum', diff: 'Easy', topic: 'HashMap', link: 'https://leetcode.com/problems/two-sum/' },
+      { id: 2, title: 'Add Two Numbers', diff: 'Medium', topic: 'Linked List', link: 'https://leetcode.com/problems/add-two-numbers/' }
+    ]
+  },
+  bloomberg: {
+    id: 'bloomberg',
+    name: 'Bloomberg',
+    tag: 'Fintech',
+    logoColor: 'text-purple-400',
+    desc: "Curated questions prioritizing design patterns, string manipulation, heaps, and low-latency data structures for Bloomberg fintech roles.",
+    lastUpdated: '1 week ago',
+    totalProblems: 175,
+    difficulty: { easy: 18, medium: 122, hard: 35 },
+    patterns: [
+      { name: 'String Processing', percentage: '28.00%', count: '49', color: '#ec4899' },
+      { name: 'Design / Heaps', percentage: '24.00%', count: '42', color: '#8b5cf6' }
+    ],
+    questions: [
+      { id: 1, title: 'All O`one Data Structure', diff: 'Hard', topic: 'Doubly Linked List + Map', link: 'https://leetcode.com/problems/all-oone-data-structure/' },
+      { id: 2, title: 'Decode String', diff: 'Medium', topic: 'Stack', link: 'https://leetcode.com/problems/decode-string/' }
     ]
   }
 };
 
-// 9-Pillar Roadmap Topics
+const CONTESTS_DATA = [
+  { id: 'cc-starters', platform: 'CodeChef', title: 'Starters 148 (Rated for All)', time: 'Today · 8:00 PM IST', duration: '2 hrs', link: 'https://www.codechef.com/contests', dateGroup: 'Today' },
+  { id: 'lc-biweekly', platform: 'LeetCode', title: 'Biweekly Contest 137', time: 'Saturday · 8:00 PM IST', duration: '1.5 hrs', link: 'https://leetcode.com/contest/', dateGroup: 'This Week' },
+  { id: 'cf-div2', platform: 'Codeforces', title: 'Codeforces Round 968 (Div. 2)', time: 'Sunday · 8:05 PM IST', duration: '2 hrs', link: 'https://codeforces.com/contests', dateGroup: 'This Week' },
+  { id: 'ac-abc', platform: 'AtCoder', title: 'AtCoder Beginner Contest 368', time: 'Saturday · 5:30 PM IST', duration: '100 mins', link: 'https://atcoder.jp/contests/', dateGroup: 'This Week' }
+];
+
+const LEADERBOARD_RANKERS = [
+  { rank: 1, name: 'Aditya Verma', handle: '@aditya_v', institution: 'IIT Bombay', score: 98.4, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aditya' },
+  { rank: 2, name: 'Priya Sharma', handle: '@priyasharma', institution: 'SLRTCE Mumbai', score: 96.8, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya' },
+  { rank: 3, name: 'Rohan Gupta', handle: '@rohan_code', institution: 'BITS Pilani', score: 94.2, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rohan' },
+  { rank: 4, name: 'Ananya Roy', handle: '@ananya_r', institution: 'NIT Trichy', score: 91.5, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ananya' },
+  { rank: 5, name: 'Kunal Deshmukh', handle: '@kunal_d', institution: 'VJTI Mumbai', score: 89.9, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kunal' }
+];
+
 const DEFAULT_ROADMAP = [
   {
-    id: 'dsa',
-    title: '2. Data Structures & Algorithms (DSA)',
-    desc: 'Target: 150–250 quality problems with pattern mastery for campus & tech interviews.',
+    id: 'dsa-core',
+    title: '1. Data Structures & Algorithms Mastery',
+    desc: 'Foundational arrays, two pointers, sliding window, trees, dynamic programming',
     assessmentSkill: 'DSA',
     topics: [
-      { name: 'Arrays & Strings (Two Pointers, Sliding Window)', diff: 'Easy-Med', link: 'https://leetcode.com/tag/array/' },
-      { name: 'Linked List (Reversal, Fast-Slow Pointer)', diff: 'Med', link: 'https://leetcode.com/tag/linked-list/' },
-      { name: 'Stack & Queue (Monotonic Stack, Parentheses)', diff: 'Med', link: 'https://leetcode.com/tag/stack/' },
-      { name: 'HashMap & HashSet (Frequency Counting, Anagrams)', diff: 'Easy', link: 'https://leetcode.com/tag/hash-table/' },
-      { name: 'Recursion & Backtracking (Subsets, Permutations)', diff: 'Med-Hard', link: 'https://leetcode.com/tag/backtracking/' },
-      { name: 'Trees & Binary Search Trees (Traversals, LCA)', diff: 'Med', link: 'https://leetcode.com/tag/tree/' },
-      { name: 'Heaps & Priority Queues (Kth Largest, Top K)', diff: 'Med', link: 'https://leetcode.com/tag/heap-priority-queue/' },
-      { name: 'Graph Algorithms (BFS/DFS, Dijkstra, Topo Sort)', diff: 'Med-Hard', link: 'https://leetcode.com/tag/graph/' },
-      { name: 'Sorting & Searching (Binary Search variations)', diff: 'Easy-Med', link: 'https://leetcode.com/tag/binary-search/' },
-      { name: 'Dynamic Programming (0/1 Knapsack, LCS, LIS, Grid DP)', diff: 'Hard', link: 'https://leetcode.com/tag/dynamic-programming/' }
+      { name: 'Arrays & Strings (Sliding Window, Prefix Sum)', diff: 'Medium', link: 'https://leetcode.com/explore/interview/card/leetcodes-interview-crash-course-data-structures-and-algorithms/703/arrays-and-strings/' },
+      { name: 'Linked Lists (Fast & Slow Pointers, Reversal)', diff: 'Easy', link: 'https://leetcode.com/explore/interview/card/leetcodes-interview-crash-course-data-structures-and-algorithms/704/linked-lists/' },
+      { name: 'Trees & Graphs (BFS, DFS, Dijkstra, Topo Sort)', diff: 'Hard', link: 'https://leetcode.com/explore/interview/card/leetcodes-interview-crash-course-data-structures-and-algorithms/707/traversals-trees-and-graphs/' },
+      { name: 'Dynamic Programming (Knapsack, 2D Grid, Memoization)', diff: 'Hard', link: 'https://leetcode.com/explore/featured/card/dynamic-programming/' }
     ]
   },
   {
-    id: 'dev',
-    title: '3. Full Stack Development Track',
-    desc: 'HTML/CSS → JavaScript → React → Node.js → Database → REST APIs → Deployment',
-    assessmentSkill: 'JavaScript',
+    id: 'fullstack-web',
+    title: '2. Modern Full Stack & Web Architecture',
+    desc: 'React, Node.js, REST APIs, WebSockets, State Management',
+    assessmentSkill: 'React',
     topics: [
-      { name: 'HTML5 & Modern Responsive CSS / Tailwind Layouts', diff: 'Easy', link: 'https://developer.mozilla.org/en-US/docs/Web/HTML' },
-      { name: 'Core JavaScript ES6+, Async/Await & Event Loop', diff: 'Med', link: 'https://javascript.info/' },
-      { name: 'React Components, Hooks, Context API & State Management', diff: 'Med', link: 'https://react.dev/' },
-      { name: 'Node.js & Express RESTful API Architecture', diff: 'Med', link: 'https://nodejs.org/' },
-      { name: 'JWT Authentication & Role-Based Access Control', diff: 'Med', link: 'https://jwt.io/' },
-      { name: 'Production Cloud Deployment (Render / Docker)', diff: 'Med', link: 'https://docs.render.com/' }
+      { name: 'React Hooks, Reconciliation & Virtual DOM', diff: 'Medium', link: 'https://react.dev/learn' },
+      { name: 'Node.js Event Loop, Async I/O & Express Routing', diff: 'Medium', link: 'https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick' },
+      { name: 'Real-time WebSockets & JWT Authentication', diff: 'Hard', link: 'https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API' }
     ]
   },
   {
-    id: 'db',
-    title: '4. Database Mastery',
-    desc: 'SQL, Relational Modeling, Indexing & ACID Transactions',
+    id: 'db-sql',
+    title: '3. SQL, Database Normalization & Indexing',
+    desc: 'Relational databases, indexing strategies, ACID guarantees',
     assessmentSkill: 'SQL & Databases',
     topics: [
-      { name: 'Relational DBs: PostgreSQL / MySQL Architecture', diff: 'Easy', link: 'https://www.postgresql.org/docs/' },
-      { name: 'Advanced SQL Queries, Subqueries & Complex Joins', diff: 'Med', link: 'https://sqlbolt.com/' },
-      { name: 'Database Indexing (B-Tree) & Query Plan Optimization', diff: 'Med', link: 'https://use-the-index-luke.com/' },
-      { name: 'ACID Transactions, Locking & Concurrency Control', diff: 'Med-Hard', link: 'https://en.wikipedia.org/wiki/ACID' },
-      { name: 'Schema Normalization (1NF, 2NF, 3NF, BCNF)', diff: 'Med', link: 'https://www.geeksforgeeks.org/database-normalization-introduction/' },
-      { name: 'NoSQL Data Modeling with MongoDB', diff: 'Easy-Med', link: 'https://www.mongodb.com/docs/' }
+      { name: 'Complex SQL Joins, Aggregations & Window Functions', diff: 'Medium', link: 'https://mode.com/sql-tutorial/sql-window-functions/' },
+      { name: 'B-Tree Indexing, Query Optimization & EXPLAIN Plans', diff: 'Hard', link: 'https://use-the-index-luke.com/' },
+      { name: 'ACID Transactions & Deadlock Prevention', diff: 'Hard', link: 'https://en.wikipedia.org/wiki/ACID' }
     ]
   },
   {
-    id: 'git',
-    title: '5. Git & GitHub Workflow',
-    desc: 'Professional team version control & code review pipelines',
-    assessmentSkill: 'Git & DevOps',
-    topics: [
-      { name: 'git clone, init, add, commit, push, status', diff: 'Easy', link: 'https://git-scm.com/doc' },
-      { name: 'Branching strategies (feature branches, main)', diff: 'Easy', link: 'https://git-scm.com/book/en/v2/Git-Branching-Branching-Workflows' },
-      { name: 'git merge, pull requests (PR) & code review', diff: 'Med', link: 'https://docs.github.com/en/pull-requests' },
-      { name: 'Resolving Git merge conflicts cleanly', diff: 'Med', link: 'https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts' },
-      { name: 'GitHub Actions & Automated CI/CD Basics', diff: 'Med', link: 'https://docs.github.com/en/actions' }
-    ]
-  },
-  {
-    id: 'cs',
-    title: '6. Core Computer Science Fundamentals',
-    desc: 'High-frequency campus interview & placement topics',
+    id: 'cs-core',
+    title: '4. Computer Science Core (OS, Networks, DBMS)',
+    desc: 'Processes, Threads, Virtual Memory, TCP/IP, OSI Layers',
     assessmentSkill: 'CS Fundamentals',
     topics: [
-      { name: 'Object-Oriented Programming (OOP: Encapsulation, Polymorphism, Abstraction)', diff: 'Med', link: 'https://en.wikipedia.org/wiki/Object-oriented_programming' },
-      { name: 'DBMS Architecture, Transactions & Storage Engines', diff: 'Med', link: 'https://www.geeksforgeeks.org/dbms/' },
-      { name: 'Operating Systems (Processes, Threads, Deadlocks, Virtual Memory)', diff: 'Med', link: 'https://www.geeksforgeeks.org/operating-systems/' },
-      { name: 'Computer Networks (OSI Model, TCP/IP, DNS, HTTP/HTTPS)', diff: 'Med', link: 'https://www.geeksforgeeks.org/computer-network-tutorials/' },
-      { name: 'Software Engineering Basics & Agile Scrum Life Cycle', diff: 'Easy', link: 'https://www.atlassian.com/agile/scrum' }
-    ]
-  },
-  {
-    id: 'projects',
-    title: '7. Real Industry Projects',
-    desc: 'Build 2–4 comprehensive production-grade projects with live deployment',
-    assessmentSkill: 'Node.js',
-    topics: [
-      { name: 'Project 1: Secure Authentication + Live Email OTP System', diff: 'Med', link: 'https://github.com/Ashish-gupta-l/Link-to-Company' },
-      { name: 'Project 2: E-Commerce Store with Payment & Cart APIs', diff: 'Med-Hard', link: 'https://github.com/' },
-      { name: 'Project 3: College Placement & Student Management ERP', diff: 'Med', link: 'https://github.com/' },
-      { name: 'Project 4: Real-Time Team Collaboration & Chat Application', diff: 'Hard', link: 'https://github.com/' }
-    ]
-  },
-  {
-    id: 'tools',
-    title: '8. Developer Tools & DevOps',
-    desc: 'VS Code, Postman, Docker containerization & Linux/CLI',
-    assessmentSkill: 'Git & DevOps',
-    topics: [
-      { name: 'VS Code / IntelliJ Debugging & Productivity Setup', diff: 'Easy', link: 'https://code.visualstudio.com/docs' },
-      { name: 'Postman API Testing & Automated Collections', diff: 'Easy', link: 'https://learning.postman.com/docs/getting-started/overview/' },
-      { name: 'Docker Basics: Dockerfile, Images, Containerization', diff: 'Med', link: 'https://docs.docker.com/get-started/' },
-      { name: 'Linux CLI: Navigation, Permissions, Bash Scripts', diff: 'Med', link: 'https://ubuntu.com/tutorials/command-line-for-beginners' },
-      { name: 'Cloud Deployment (Render, Vercel, Supabase)', diff: 'Med', link: 'https://render.com' }
-    ]
-  },
-  {
-    id: 'softskills',
-    title: '9. Soft Skills & Technical Interview Readiness',
-    desc: 'Articulating code design, debugging under pressure, and teamwork',
-    assessmentSkill: 'CS Fundamentals',
-    topics: [
-      { name: 'Structured Problem Solving & Clarifying Questions', diff: 'Med', link: 'https://www.freecodecamp.org/news/how-to-solve-coding-problems/' },
-      { name: 'Explaining Code & Time/Space Complexity Out Loud', diff: 'Med', link: 'https://www.bigocheatsheet.com/' },
-      { name: 'Live Debugging & System Design Whiteboarding', diff: 'Med-Hard', link: 'https://github.com/donnemartin/system-design-primer' },
-      { name: 'Reading Official Documentation & Fast Troubleshooting', diff: 'Med', link: 'https://stackoverflow.com/' },
-      { name: 'Collaborative Teamwork & Agile Sprint Standups', diff: 'Easy', link: 'https://www.atlassian.com/agile' }
+      { name: 'Process Synchronization & Multithreading', diff: 'Hard', link: 'https://www.geeksforgeeks.org/process-synchronization-in-operating-system/' },
+      { name: 'TCP/IP Handshake, DNS & HTTP/3 Protocols', diff: 'Medium', link: 'https://hpbn.co/' }
     ]
   }
 ];
 
-// Contest Calendar Data
-const CONTESTS_DATA = [
-  { id: 1, title: 'Logical Reasoning (Part 3)', time: '12:00 AM - 12:00 AM', dateGroup: 'Today', subscribers: 59, platform: 'LinktoCompany', link: '/assessment' },
-  { id: 2, title: 'Starters 253', time: '8:00 PM - 10:00 PM', dateGroup: 'Today', subscribers: 56, platform: 'CodeChef', link: 'https://www.codechef.com/contests' },
-  { id: 3, title: '13th Asprova Programming Contest (AtCoder)', time: '11:30 AM - 3:30 PM', dateGroup: '29 Aug 2026', subscribers: 14, platform: 'AtCoder', link: 'https://atcoder.jp/contests' },
-  { id: 4, title: 'AtCoder Beginner Contest 473', time: '5:30 PM - 7:10 PM', dateGroup: '29 Aug 2026', subscribers: 37, platform: 'AtCoder', link: 'https://atcoder.jp/contests' },
-  { id: 5, title: 'LeetCode Weekly Contest 412', time: '8:00 AM - 9:30 AM', dateGroup: '30 Aug 2026', subscribers: 142, platform: 'LeetCode', link: 'https://leetcode.com/contest/' },
-  { id: 6, title: 'Codeforces Round 970 (Div. 2)', time: '8:05 PM - 10:05 PM', dateGroup: '31 Aug 2026', subscribers: 98, platform: 'Codeforces', link: 'https://codeforces.com/contests' }
-];
-
-// Leaderboard Data
-const LEADERBOARD_RANKERS = [
-  { rank: 1, name: 'Pratham Lashkari', handle: '@Pratham', institution: 'Sushila Devi Bansal College of Technology', score: '889.42', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Pratham' },
-  { rank: 2, name: 'Tejas Nalawade', handle: '@tejas_nalawade', institution: 'Vishwakarma Institute of Technology', score: '888.94', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tejas' },
-  { rank: 3, name: 'Raj Roy', handle: '@RkRay', institution: 'Indian Institute of Technology (BHU)', score: '888.44', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Raj' },
-  { rank: 4, name: 'Aarav Sharma', handle: '@aarav_s', institution: 'Delhi Technological University', score: '876.10', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Aarav' },
-  { rank: 5, name: 'Ashish Gupta', handle: '@ashish_g', institution: 'SLRTCE Mumbai', score: '865.50', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Ashish' },
-  { rank: 6, name: 'Ananya Verma', handle: '@ananya_v', institution: 'Thapar Institute of Engineering', score: '852.30', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Ananya' }
-];
-
 const Dashboard = () => {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
   const { user } = getSession();
 
   const role = user?.role || 'Student';
   const isCompany = role === 'Company';
   const isCollege = role === 'College' || role === 'Faculty';
-  const isStudent = !isCompany && !isCollege;
+  const isAdmin = role === 'Admin';
+  const isStudent = !isCompany && !isCollege && !isAdmin;
 
   const [stats, setStats] = useState({
     trust_score: 15,
@@ -316,10 +249,11 @@ const Dashboard = () => {
     completed_topics: [],
     interviews: [],
     endorsements: [],
-    notifications: []
+    notifications: [],
+    applications: []
   });
 
-  const [activeTab, setActiveTab] = useState(isCompany ? 'talents' : 'my-sheets');
+  const [activeTab, setActiveTab] = useState(isCompany ? 'recruiter-overview' : isCollege ? 'campus-overview' : 'my-sheets');
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [exploreFilter, setExploreFilter] = useState('Company Wise');
   const [searchQuery, setSearchQuery] = useState('');
@@ -337,7 +271,58 @@ const Dashboard = () => {
   const [talents, setTalents] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedTalent, setSelectedTalent] = useState(null);
-  const [scheduleForm, setScheduleForm] = useState({ role_title: 'Software Engineer - Full Stack', date_time: 'Tomorrow at 3:00 PM IST', meet_link: 'https://meet.google.com/new', notes: '' });
+  const [scheduleForm, setScheduleForm] = useState({
+    role_title: 'Software Engineer - Full Stack',
+    date_time: 'Tomorrow at 3:00 PM IST',
+    meet_link: 'https://meet.google.com/new',
+    notes: ''
+  });
+
+  // Student Profile & Skills State
+  const [studentProfile, setStudentProfile] = useState({
+    branch: 'Computer Science',
+    year: '3rd Year',
+    college: 'SLRTCE, Mumbai',
+    cgpa: 8.8,
+    technical_skills: ['Python', 'Java', 'SQL', 'React'],
+    soft_skills: ['Problem Solving', 'Teamwork'],
+    preferred_domains: ['Artificial Intelligence', 'Web Development'],
+    career_interests: 'Software Engineer / AI & Full Stack',
+    github_url: '',
+    portfolio_url: '',
+    resume_url: '',
+    verified_skills: []
+  });
+  const [newSkillInput, setNewSkillInput] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [myApplications, setMyApplications] = useState([]);
+  const [recommendedChallenges, setRecommendedChallenges] = useState([]);
+
+  // Recruiter Challenge & Applicant Management State
+  const [recruiterChallenges, setRecruiterChallenges] = useState([]);
+  const [selectedChallengeId, setSelectedChallengeId] = useState('');
+  const [applicantsList, setApplicantsList] = useState([]);
+  const [applicantsLoading, setApplicantsLoading] = useState(false);
+  const [applicantFilterStatus, setApplicantFilterStatus] = useState('All');
+  const [applicantMinMatch, setApplicantMinMatch] = useState(0);
+
+  // Recruiter Evaluation Modal State
+  const [evaluatingApp, setEvaluatingApp] = useState(null);
+  const [evalForm, setEvalForm] = useState({
+    tech_score: 88,
+    problem_solving_score: 85,
+    communication_score: 80,
+    code_quality_score: 90,
+    innovation_score: 85,
+    feedback: 'Excellent modular repository, good test coverage, and crisp documentation.',
+    outcome: 'Selected'
+  });
+  const [submittingEval, setSubmittingEval] = useState(false);
+
+  // College Analytics State
+  const [collegeAnalytics, setCollegeAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [verificationsData, setVerificationsData] = useState({ companies: [], challenges: [] });
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -350,13 +335,48 @@ const Dashboard = () => {
     }
   }, [location.search]);
 
-  const loadData = () => {
-    if (!user) { navigate('/auth'); return; }
-    dashboardApi.stats()
-      .then((data) => setStats(data))
-      .catch(() => {});
+  const loadApplicantsForChallenge = async (challId) => {
+    if (!challId) return;
+    setApplicantsLoading(true);
+    try {
+      const res = await challengeApi.getApplicants(challId);
+      setApplicantsList(res.applicants || []);
+    } catch (err) {
+      setApplicantsList([]);
+    } finally {
+      setApplicantsLoading(false);
+    }
+  };
 
+  const loadData = async () => {
+    if (!user) { navigate('/auth'); return; }
+
+    dashboardApi.stats().then((data) => setStats(data)).catch(() => {});
     dashboardApi.listTalents().then((r) => setTalents(r.talents || [])).catch(() => {});
+
+    if (isStudent) {
+      profileApi.getStudentProfile().then((res) => {
+        if (res.profile) setStudentProfile(res.profile);
+      }).catch(() => {});
+      challengeApi.myApplications().then((res) => setMyApplications(res.applications || [])).catch(() => {});
+      challengeApi.getRecommended().then((res) => setRecommendedChallenges(res.recommended || [])).catch(() => {});
+    }
+
+    if (isCompany || isCollege || isAdmin) {
+      challengeApi.list().then((res) => {
+        const chs = res.challenges || [];
+        setRecruiterChallenges(chs);
+        if (chs.length > 0) {
+          setSelectedChallengeId(chs[0].id);
+          loadApplicantsForChallenge(chs[0].id);
+        }
+      }).catch(() => {});
+    }
+
+    if (isCollege || isAdmin) {
+      analyticsApi.college().then((data) => setCollegeAnalytics(data)).catch(() => {});
+      adminApi.getVerifications().then((data) => setVerificationsData(data)).catch(() => {});
+    }
 
     const savedCustom = localStorage.getItem('ltc_custom_sheets');
     if (savedCustom) {
@@ -368,6 +388,95 @@ const Dashboard = () => {
     loadData();
   }, [user]);
 
+  // Skill Chip Add & Remove
+  const handleAddSkill = (e) => {
+    e.preventDefault();
+    if (!newSkillInput.trim()) return;
+    const skill = newSkillInput.trim();
+    if (studentProfile.technical_skills?.includes(skill)) {
+      toast({ title: 'Skill already added', variant: 'destructive' });
+      return;
+    }
+    setStudentProfile({
+      ...studentProfile,
+      technical_skills: [...(studentProfile.technical_skills || []), skill]
+    });
+    setNewSkillInput('');
+  };
+
+  const handleRemoveSkill = (skillToRemove) => {
+    setStudentProfile({
+      ...studentProfile,
+      technical_skills: studentProfile.technical_skills?.filter((s) => s !== skillToRemove) || []
+    });
+  };
+
+  const handleSaveStudentProfile = async () => {
+    setProfileSaving(true);
+    try {
+      await profileApi.updateStudentProfile(studentProfile);
+      toast({
+        title: 'Profile Updated! 🚀',
+        description: 'Your technical skills have been saved. Challenge match scores have been recalculated.'
+      });
+      loadData();
+    } catch (err) {
+      toast({
+        title: 'Update Failed',
+        description: err?.response?.data?.detail || 'Try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleUpdateStatus = async (appId, newStatus) => {
+    try {
+      await challengeApi.updateStatus(appId, newStatus);
+      toast({ title: `Status Updated to "${newStatus}"` });
+      if (selectedChallengeId) loadApplicantsForChallenge(selectedChallengeId);
+    } catch (err) {
+      toast({ title: 'Error updating status', variant: 'destructive' });
+    }
+  };
+
+  const handleOpenEvaluationModal = (app) => {
+    setEvaluatingApp(app);
+    setEvalForm({
+      tech_score: app.evaluation?.tech_score || 88,
+      problem_solving_score: app.evaluation?.problem_solving_score || 85,
+      communication_score: app.evaluation?.communication_score || 80,
+      code_quality_score: app.evaluation?.code_quality_score || 90,
+      innovation_score: app.evaluation?.innovation_score || 85,
+      feedback: app.evaluation?.feedback || 'Clean codebase, modular structure, solid problem-solving approach.',
+      outcome: app.evaluation?.outcome || 'Selected'
+    });
+  };
+
+  const handleSubmitEvaluation = async (e) => {
+    e.preventDefault();
+    if (!evaluatingApp) return;
+    setSubmittingEval(true);
+    try {
+      const res = await challengeApi.evaluate(evaluatingApp.id, evalForm);
+      toast({
+        title: 'Evaluation Submitted! 🎉',
+        description: `Overall Score: ${res.overall_score}% (${res.outcome}). Student notified.`
+      });
+      setEvaluatingApp(null);
+      if (selectedChallengeId) loadApplicantsForChallenge(selectedChallengeId);
+    } catch (err) {
+      toast({
+        title: 'Evaluation Failed',
+        description: err?.response?.data?.detail || 'Try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSubmittingEval(false);
+    }
+  };
+
   const toggleTopic = async (topicName) => {
     const current = stats.completed_topics || [];
     let updated;
@@ -376,7 +485,7 @@ const Dashboard = () => {
     } else {
       updated = [...current, topicName];
     }
-    
+
     const newCount = updated.length;
     const newReadiness = Math.min(100, Math.floor((newCount * 2.2) + (stats.verified_skills_count * 10) + (stats.challenges_solved * 12)));
     setStats({ ...stats, completed_topics: updated, skill_readiness: newReadiness });
@@ -425,785 +534,752 @@ const Dashboard = () => {
         student_id: selectedTalent.id,
         student_name: selectedTalent.name,
         student_email: selectedTalent.email,
-        role_title: scheduleForm.role_title,
-        date_time: scheduleForm.date_time,
-        meet_link: scheduleForm.meet_link,
-        notes: scheduleForm.notes
+        ...scheduleForm
+      });
+      toast({
+        title: 'Interview Dispatched! 🎉',
+        description: `Automated calendar invite sent to ${selectedTalent.email}`
       });
       setShowScheduleModal(false);
-      toast({ title: 'Interview Scheduled!', description: `Interview invitation sent to ${selectedTalent.name} (${selectedTalent.email})` });
       loadData();
-    } catch (err) {
-      toast({ title: 'Failed to Schedule', description: err?.response?.data?.detail || 'Try again.', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Failed to schedule', variant: 'destructive' });
     }
   };
 
   const totalTopicsCount = DEFAULT_ROADMAP.reduce((acc, p) => acc + p.topics.length, 0);
   const completedTopicsCount = stats.completed_topics?.length || 0;
-  const selectedCompany = selectedCompanyId ? COMPANY_SHEETS[selectedCompanyId] : null;
+  const selectedCompany = COMPANY_SHEETS[selectedCompanyId];
+
+  // Recruiter applicant filtering
+  const filteredApplicants = useMemo(() => {
+    return applicantsList.filter((a) => {
+      if (applicantFilterStatus !== 'All' && a.status !== applicantFilterStatus) return false;
+      if (applicantMinMatch > 0 && (a.match_score || 0) < applicantMinMatch) return false;
+      return true;
+    });
+  }, [applicantsList, applicantFilterStatus, applicantMinMatch]);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Selected':
+      case 'Internship Offered':
+      case 'Placement Offered':
+        return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+      case 'Evaluated':
+      case 'Submitted':
+        return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
+      case 'Shortlisted':
+      case 'Challenge Assigned':
+        return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+      case 'Under Review':
+      case 'Applied':
+        return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+      case 'Rejected':
+        return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+      default:
+        return 'text-white/40 bg-white/5 border-white/10';
+    }
+  };
 
   return (
-    <AppLayout
-      activeTab={activeTab}
-      onTabChange={(t) => {
-        setActiveTab(t);
-        setSelectedCompanyId(null);
-      }}
-      stats={stats}
-    >
+    <AppLayout activeTab={activeTab} onTabChange={setActiveTab} stats={stats}>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
         
         {/* ========================================================================= */}
-        {/* RECRUITER & COMPANY DASHBOARD VIEW (When Company/Recruiter logs in) */}
+        {/* RECRUITER / COMPANY VIEWS */}
         {/* ========================================================================= */}
         {isCompany && (
+          <>
+            {/* VIEW: RECRUITER OVERVIEW */}
+            {activeTab === 'recruiter-overview' && (
+              <div className="space-y-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                  <div>
+                    <div className="text-[11px] tracking-widest uppercase text-blue-400 font-mono font-bold flex items-center gap-2">
+                      <Building2 size={14} /> RECRUITER TALENT & HIRING HUB
+                    </div>
+                    <h1 className="text-2xl md:text-3xl font-black text-white mt-1">
+                      Welcome, {user?.name}
+                    </h1>
+                    <p className="text-xs md:text-sm text-white/50 mt-1">
+                      Source candidates verified with proctored skill tests and schedule direct technical interviews.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Link
+                      to="/challenges"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-blue-600/20"
+                    >
+                      <PlusCircle size={15} /> Post Live Challenge
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Quick Metrics for Recruiter */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Verified Candidates</div>
+                    <div className="text-2xl font-black text-emerald-400 mt-1">{talents.length}</div>
+                    <div className="text-[10px] text-white/40 font-mono mt-0.5">With anti-cheat badges</div>
+                  </div>
+                  <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Active Challenges</div>
+                    <div className="text-2xl font-black text-blue-400 mt-1">{recruiterChallenges.length || 3}</div>
+                    <div className="text-[10px] text-white/40 font-mono mt-0.5">Live industry problem statements</div>
+                  </div>
+                  <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Total Applicants</div>
+                    <div className="text-2xl font-black text-amber-400 mt-1">24</div>
+                    <div className="text-[10px] text-white/40 font-mono mt-0.5">With skill match breakdown</div>
+                  </div>
+                  <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
+                    <div className="text-[11px] text-white/40 font-mono uppercase">Scheduled Interviews</div>
+                    <div className="text-2xl font-black text-purple-400 mt-1">{stats.interviews?.length || 0}</div>
+                    <div className="text-[10px] text-white/40 font-mono mt-0.5">Google Meet invites sent</div>
+                  </div>
+                </div>
+
+                {/* Quick action buttons */}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div
+                    onClick={() => setActiveTab('applicants')}
+                    className="p-5 rounded-xl border border-blue-500/30 bg-[#0b0e18] hover:border-blue-400 transition-all cursor-pointer space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-white text-base flex items-center gap-2">
+                        <Award size={16} className="text-blue-400" /> Review Challenge Applicants
+                      </h3>
+                      <ChevronRight size={16} className="text-blue-400" />
+                    </div>
+                    <p className="text-xs text-white/60">
+                      Score candidate GitHub submissions using the 5-criteria rubric (Technical, Problem Solving, Communication, Code Quality, Innovation).
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setActiveTab('talents')}
+                    className="p-5 rounded-xl border border-emerald-500/30 bg-[#0b0e18] hover:border-emerald-400 transition-all cursor-pointer space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-white text-base flex items-center gap-2">
+                        <Users size={16} className="text-emerald-400" /> Verified Talent Pool
+                      </h3>
+                      <ChevronRight size={16} className="text-emerald-400" />
+                    </div>
+                    <p className="text-xs text-white/60">
+                      Browse top-ranking campus candidates verified via anti-cheat assessments with 1-click Google Meet interview invites.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW: RECRUITER APPLICANT REVIEW & EVALUATION */}
+            {activeTab === 'applicants' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                  <div>
+                    <h1 className="text-2xl font-black text-white">Challenge Applicants & Evaluation</h1>
+                    <p className="text-xs text-white/50 mt-1">Review student solutions filtered by skill match and score multi-criteria rubrics.</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Label className="text-xs text-white/60">Select Challenge:</Label>
+                    <select
+                      value={selectedChallengeId}
+                      onChange={(e) => {
+                        setSelectedChallengeId(e.target.value);
+                        loadApplicantsForChallenge(e.target.value);
+                      }}
+                      className="bg-[#0b0d14] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs"
+                    >
+                      {recruiterChallenges.map((c) => (
+                        <option key={c.id} value={c.id}>{c.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#0b0d14] border border-white/10 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/50 font-mono">Status:</span>
+                    {['All', 'Applied', 'Submitted', 'Evaluated', 'Selected', 'Rejected'].map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setApplicantFilterStatus(st)}
+                        className={`px-2.5 py-1 rounded-md transition-colors ${
+                          applicantFilterStatus === st ? 'bg-blue-600 text-white font-bold' : 'bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/50 font-mono">Min Match:</span>
+                    <select
+                      value={applicantMinMatch}
+                      onChange={(e) => setApplicantMinMatch(Number(e.target.value))}
+                      className="bg-[#07080d] border border-white/10 rounded px-2 py-1 text-white text-xs"
+                    >
+                      <option value={0}>All (0%+)</option>
+                      <option value={50}>≥ 50% Match</option>
+                      <option value={75}>≥ 75% Match</option>
+                      <option value={90}>≥ 90% Match</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Applicants List */}
+                {applicantsLoading ? (
+                  <div className="py-12 text-center text-white/50">
+                    <Loader2 size={24} className="animate-spin mx-auto text-blue-500 mb-2" />
+                    <p className="text-xs font-mono">Loading challenge applicants…</p>
+                  </div>
+                ) : filteredApplicants.length === 0 ? (
+                  <div className="py-12 text-center rounded-xl border border-white/10 bg-[#0b0d14] p-8 text-white/50 text-xs font-mono">
+                    No applicants matching filter criteria for this challenge.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredApplicants.map((app) => (
+                      <div key={app.id} className="rounded-2xl border border-white/10 bg-[#0b0d14] p-5 space-y-4 shadow-lg">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-white text-base">{app.user_name}</h3>
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getStatusColor(app.status)}`}>
+                                {app.status}
+                              </span>
+                            </div>
+                            <div className="text-xs text-white/50 font-mono mt-0.5">
+                              {app.user_email} · {app.branch || 'Computer Science'} ({app.year || '3rd Year'}) · CGPA: {app.cgpa || '8.8'}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <div className="text-[10px] font-mono text-white/40 uppercase">Skill Match</div>
+                              <div className="text-lg font-black text-emerald-400 font-mono">{app.match_score}%</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Matched & Missing Skills Breakdown */}
+                        <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                          <div className="p-3 rounded-lg bg-black/40 border border-emerald-500/20">
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase block mb-1">
+                              ✓ Matched Skills:
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {app.matched_skills?.map((sk) => (
+                                <span key={sk} className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-mono">
+                                  {sk}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-black/40 border border-amber-500/20">
+                            <span className="text-[10px] font-mono text-amber-400 font-bold uppercase block mb-1">
+                              ✗ Missing Skills:
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {app.missing_skills?.length > 0 ? (
+                                app.missing_skills.map((sk) => (
+                                  <span key={sk} className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 font-mono">
+                                    {sk}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-emerald-400 text-[10px] font-mono">Full Match!</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Submission Link & Notes */}
+                        {app.github_url && (
+                          <div className="p-3 rounded-lg bg-[#07080d] border border-white/5 space-y-1 text-xs font-mono">
+                            <div className="flex items-center gap-2 text-blue-400">
+                              <FileCode size={14} />
+                              <a href={app.github_url} target="_blank" rel="noreferrer" className="hover:underline truncate">
+                                {app.github_url}
+                              </a>
+                            </div>
+                            {app.notes && <p className="text-white/60 text-[11px] font-sans">{app.notes}</p>}
+                          </div>
+                        )}
+
+                        {/* Action buttons & Evaluation triggers */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => handleUpdateStatus(app.id, 'Shortlisted')}
+                              className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs h-8 px-3"
+                            >
+                              Shortlist
+                            </Button>
+                            <Button
+                              onClick={() => handleUpdateStatus(app.id, 'Challenge Assigned')}
+                              className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs h-8 px-3"
+                            >
+                              Assign Task
+                            </Button>
+                            <Button
+                              onClick={() => handleUpdateStatus(app.id, 'Rejected')}
+                              variant="ghost"
+                              className="text-xs text-rose-400 hover:text-rose-300 h-8 px-2"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+
+                          <Button
+                            onClick={() => handleOpenEvaluationModal(app)}
+                            className="bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs h-8 px-4"
+                          >
+                            <Award size={14} className="mr-1" />
+                            {app.evaluation ? 'Edit Evaluation Scorecard' : 'Evaluate Submission'}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ========================================================================= */}
+        {/* COLLEGE & ADMIN VIEWS (Skill Gap Matrix) */}
+        {/* ========================================================================= */}
+        {(isCollege || isAdmin) && activeTab === 'campus-overview' && (
           <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
               <div>
-                <div className="text-[11px] tracking-widest uppercase text-blue-400 font-mono font-bold flex items-center gap-2">
-                  <Building2 size={14} /> RECRUITER TALENT & HIRING HUB
+                <div className="text-[11px] tracking-widest uppercase text-emerald-400 font-mono font-bold flex items-center gap-2">
+                  <GraduationCap size={14} /> CAMPUS SKILL GAP MATRIX & INDUSTRY ALIGNMENT
                 </div>
                 <h1 className="text-2xl md:text-3xl font-black text-white mt-1">
-                  Welcome, {user?.name}
+                  Academia–Industry Collaboration Dashboard
                 </h1>
                 <p className="text-xs md:text-sm text-white/50 mt-1">
-                  Source candidates verified with proctored skill tests and schedule direct technical interviews.
+                  Analyze batch readiness against live industry hiring challenges, identify critical curriculum gaps, and track student outcomes.
                 </p>
               </div>
-
-              <div className="flex gap-2">
-                <Link
-                  to="/challenges"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-blue-600/20"
-                >
-                  <PlusCircle size={15} /> Post Live Challenge
-                </Link>
-              </div>
             </div>
 
-            {/* Quick Metrics for Recruiter */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
-                <div className="text-[11px] text-white/40 font-mono uppercase">Verified Candidates</div>
-                <div className="text-2xl font-black text-emerald-400 mt-1">{talents.length}</div>
-                <div className="text-[10px] text-white/40 font-mono mt-0.5">With anti-cheat badges</div>
+                <div className="text-[10px] text-white/40 font-mono uppercase">Total Enrolled</div>
+                <div className="text-2xl font-black text-white mt-1">{collegeAnalytics?.total_students || 240}</div>
+                <div className="text-[10px] text-emerald-400 font-mono mt-0.5">85% Active on Challenges</div>
               </div>
               <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
-                <div className="text-[11px] text-white/40 font-mono uppercase">Avg Candidate Score</div>
-                <div className="text-2xl font-black text-blue-400 mt-1">84%</div>
-                <div className="text-[10px] text-white/40 font-mono mt-0.5">Top quartile accuracy</div>
+                <div className="text-[10px] text-white/40 font-mono uppercase">Industry Challenges</div>
+                <div className="text-2xl font-black text-blue-400 mt-1">{collegeAnalytics?.total_challenges || 5}</div>
+                <div className="text-[10px] text-white/40 font-mono mt-0.5">Verified Corporate Partners</div>
               </div>
               <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
-                <div className="text-[11px] text-white/40 font-mono uppercase">Active Challenges</div>
-                <div className="text-2xl font-black text-amber-400 mt-1">3</div>
-                <div className="text-[10px] text-white/40 font-mono mt-0.5">Receiving GitHub submissions</div>
+                <div className="text-[10px] text-white/40 font-mono uppercase">Shortlisted Candidates</div>
+                <div className="text-2xl font-black text-purple-400 mt-1">{collegeAnalytics?.shortlisted_count || 34}</div>
+                <div className="text-[10px] text-purple-400 font-mono mt-0.5">Direct Recruiter Invites</div>
               </div>
               <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14]">
-                <div className="text-[11px] text-white/40 font-mono uppercase">Scheduled Interviews</div>
-                <div className="text-2xl font-black text-purple-400 mt-1">{stats.interviews?.length || 0}</div>
-                <div className="text-[10px] text-white/40 font-mono mt-0.5">Google Meet invites sent</div>
+                <div className="text-[10px] text-white/40 font-mono uppercase">Internships & PPOs</div>
+                <div className="text-2xl font-black text-emerald-400 mt-1">{collegeAnalytics?.internships || 18}</div>
+                <div className="text-[10px] text-emerald-400 font-mono mt-0.5">+12 Direct Placements</div>
               </div>
             </div>
 
-            {/* Candidate Talent Pool */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+            {/* INDUSTRY DEMAND VS STUDENT SKILLS GAP MATRIX */}
+            <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Verified Candidate Talent Pool</h2>
-                  <p className="text-xs text-white/50">Candidates ranked by verified accuracy & integrity. 1-click schedule interview.</p>
+                  <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                    <BarChart2 size={18} className="text-emerald-400" /> Industry Demand vs. Student Skills Gap Matrix
+                  </h3>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Real-time comparison between skills required in active company challenges vs. verified student profiles.
+                  </p>
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {talents.map((t) => (
-                  <div key={t.id} className="rounded-2xl border border-white/10 bg-[#0b0d14] p-5 space-y-3 hover:border-emerald-500/40 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-bold text-white text-base">{t.name}</h4>
-                        <span className="text-xs text-white/50 font-mono truncate block">{t.email}</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                        Trust: {t.trust_score}/100
+              {/* Visual Bars & Comparison Table */}
+              <div className="space-y-4">
+                {collegeAnalytics?.demand_vs_supply?.map((item) => (
+                  <div key={item.skill} className="p-4 rounded-xl bg-[#07090e] border border-white/5 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-white font-mono text-sm">{item.skill}</span>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        item.status === 'Critical Gap' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                        item.status === 'Moderate Gap' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {item.status}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded-lg text-xs font-mono">
-                      <div><span className="text-white/40">Verified:</span> <strong className="text-emerald-400">{t.verified_count} skills</strong></div>
-                      <div><span className="text-white/40">Avg Score:</span> <strong className="text-blue-400">{t.avg_score}%</strong></div>
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                      <div>
+                        <div className="flex justify-between text-[11px] text-blue-300 mb-1">
+                          <span>Industry Demand</span>
+                          <strong>{item.industry_demand_pct}%</strong>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full bg-blue-500" style={{ width: `${item.industry_demand_pct}%` }}></div>
+                        </div>
+                      </div>
 
-                    <Button
-                      onClick={() => {
-                        setSelectedTalent(t);
-                        setShowScheduleModal(true);
-                      }}
-                      className="w-full bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-semibold py-2 cursor-pointer"
-                    >
-                      <Calendar size={13} className="mr-1.5" /> Schedule Direct Interview
-                    </Button>
+                      <div>
+                        <div className="flex justify-between text-[11px] text-emerald-300 mb-1">
+                          <span>Student Supply</span>
+                          <strong>{item.student_supply_pct}%</strong>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full bg-emerald-500" style={{ width: `${item.student_supply_pct}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Scheduled Interviews Management Table */}
+            {/* Department Skill Readiness Table */}
             <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-4">
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Calendar size={16} className="text-purple-400" /> Scheduled Technical Interviews ({stats.interviews?.length || 0})
-              </h3>
-
-              {stats.interviews?.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs md:text-sm">
-                    <thead className="bg-[#08090e] border-b border-white/10 text-white/50 font-mono text-[11px] uppercase">
-                      <tr>
-                        <th className="p-3">Candidate</th>
-                        <th className="p-3">Position Title</th>
-                        <th className="p-3">Date & Time</th>
-                        <th className="p-3">Meeting Link</th>
-                        <th className="p-3 text-right">Status</th>
+              <h3 className="font-bold text-white text-base">Department-Wise Skill Readiness & Placement Rates</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs md:text-sm">
+                  <thead className="bg-[#08090e] border-b border-white/10 text-white/50 font-mono text-[11px] uppercase">
+                    <tr>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Students</th>
+                      <th className="p-3">Avg Readiness</th>
+                      <th className="p-3">Most Critical Gap</th>
+                      <th className="p-3 text-right">Placement Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04]">
+                    {collegeAnalytics?.department_stats?.map((dept, idx) => (
+                      <tr key={idx}>
+                        <td className="p-3 font-bold text-white">{dept.department}</td>
+                        <td className="p-3 font-mono text-white/70">{dept.students}</td>
+                        <td className="p-3 font-mono text-emerald-400 font-bold">{dept.avg_readiness}%</td>
+                        <td className="p-3 text-rose-300 font-mono text-xs">{dept.critical_gap}</td>
+                        <td className="p-3 font-mono text-right text-blue-400 font-bold">{dept.placement_rate}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.04]">
-                      {stats.interviews.map((iv) => (
-                        <tr key={iv.id}>
-                          <td className="p-3">
-                            <div className="font-bold text-white">{iv.student_name}</div>
-                            <span className="text-[11px] text-white/40 font-mono">{iv.student_email}</span>
-                          </td>
-                          <td className="p-3 text-white font-medium">{iv.role_title}</td>
-                          <td className="p-3 font-mono text-white/70">{iv.date_time}</td>
-                          <td className="p-3 font-mono">
-                            <a href={iv.meet_link} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline flex items-center gap-1">
-                              <span>Join Meet</span> <ExternalLink size={11} />
-                            </a>
-                          </td>
-                          <td className="p-3 text-right">
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                              {iv.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-xs text-white/40 py-2">No interviews scheduled yet. Click "Schedule Direct Interview" on any candidate above.</p>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* STUDENT PORTAL VIEWS (ONLY SHOWN FOR STUDENTS) */}
+        {/* STUDENT VIEWS */}
         {/* ========================================================================= */}
         {isStudent && (
           <>
-            {/* VIEW 1: EXPLORE SHEETS & TRACK CODING SHEETS (Screenshot 1 - No Owl Mascot) */}
-            {(activeTab === 'explore-sheets' || activeTab === 'company-kit') && !selectedCompany && (
+            {/* VIEW: MY APPLICATIONS (Application pipeline tracker) */}
+            {activeTab === 'applications' && (
               <div className="space-y-6">
-                
-                {/* Header (Mascot removed as requested!) */}
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
                   <div>
-                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-                      Track Coding Sheets in One Place
-                    </h1>
-                    <p className="text-xs md:text-sm text-white/50 mt-1">
-                      Choose from 30+ structured coding paths, company kits, and placement roadmaps
+                    <h1 className="text-2xl md:text-3xl font-black text-white">My Challenge Applications</h1>
+                    <p className="text-xs md:text-sm text-white/50 mt-1">Track multi-stage status, recruiter reviews, and internship/placement offers.</p>
+                  </div>
+                  <Link
+                    to="/challenges"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold"
+                  >
+                    <Plus size={14} /> Explore More Challenges
+                  </Link>
+                </div>
+
+                {myApplications.length === 0 ? (
+                  <div className="text-center py-16 rounded-2xl border border-white/10 bg-[#0b0d14] p-8 space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto text-white/40">
+                      <Award size={24} />
+                    </div>
+                    <h3 className="text-base font-bold text-white">No active applications yet</h3>
+                    <p className="text-xs text-white/50 max-w-md mx-auto">
+                      Discover company challenges matching your technical skills, submit working code solutions, and get evaluated for direct offers!
                     </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowTourModal(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold font-mono transition-colors cursor-pointer"
+                    <Link
+                      to="/challenges"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs rounded-lg"
                     >
-                      <BookOpen size={14} /> Tour
-                    </button>
+                      Browse Industry Challenges
+                    </Link>
                   </div>
-                </div>
-
-                {/* Search Bar (Screenshot 1) */}
-                <div className="relative max-w-md">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" size={16} />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search any coding sheet, company or topic..."
-                    className="pl-10 bg-[#0b0d14] border-white/10 text-white placeholder:text-white/30 text-xs rounded-xl focus:border-amber-400 h-10"
-                  />
-                </div>
-
-                {/* Category Filter Pills (Orange Active Highlight - Screenshot 1) */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {[
-                    'Company Wise', 'All', 'Popular', 'Quick Revision', 'Complete DSA', 'Topic Specific', 'Competitive'
-                  ].map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setExploreFilter(tab)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        exploreFilter === tab
-                          ? 'bg-[#f97316] text-white shadow-md shadow-orange-500/20 font-bold'
-                          : 'bg-[#0b0d14] hover:bg-white/5 text-white/70 border border-white/10'
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Section Title */}
-                <div className="flex items-center justify-between pt-2">
-                  <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                    <span>Company Wise Sheets</span>
-                    <span className="text-xs text-blue-400 font-normal font-mono cursor-pointer hover:underline">(Learn More)</span>
-                  </h2>
-                </div>
-
-                {/* CLICKABLE COMPANY CARDS GRID (Screenshot 1) */}
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.values(COMPANY_SHEETS)
-                    .filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.desc.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((company) => (
-                      <button
-                        key={company.id}
-                        type="button"
-                        onClick={() => setSelectedCompanyId(company.id)}
-                        className="rounded-2xl border border-white/10 hover:border-amber-400/60 bg-[#0b0d14] hover:bg-[#0f121d] p-6 text-left flex flex-col justify-between space-y-4 transition-all group shadow-lg hover:shadow-amber-500/5 cursor-pointer"
-                      >
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-xl group-hover:scale-105 transition-transform">
-                              <span className={company.logoColor}>{company.name.charAt(0)}</span>
-                            </div>
-                            <div>
-                              <h3 className="font-display font-black text-lg text-white group-hover:text-amber-300 transition-colors">
-                                {company.name}
-                              </h3>
-                              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{company.tag}</span>
-                            </div>
-                          </div>
-
-                          <p className="text-xs text-white/55 mt-3 line-clamp-2 leading-relaxed">
-                            {company.desc}
-                          </p>
-                        </div>
-
-                        <div className="pt-3 border-t border-white/5 flex items-center justify-between text-white/40 text-xs font-mono">
-                          <div className="flex items-center gap-2">
-                            <FileText size={14} className="text-white/40" />
-                            <span>{company.totalProblems} Problems</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-amber-400 font-semibold group-hover:translate-x-1 transition-transform text-xs">
-                            <span>Open Kit</span>
-                            <ChevronRight size={14} />
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                </div>
-
-              </div>
-            )}
-
-            {/* VIEW 1.B: COMPANY SHEET DETAIL VIEW (Screenshot 4 - Google/Amazon/Meta) */}
-            {selectedCompany && (
-              <div className="space-y-6">
-                
-                <button
-                  type="button"
-                  onClick={() => setSelectedCompanyId(null)}
-                  className="inline-flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition-colors font-mono cursor-pointer"
-                >
-                  <ChevronLeft size={16} /> Back to Company Sheets
-                </button>
-
-                <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                  <div className="space-y-3 max-w-3xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-2xl">
-                        <span className={selectedCompany.logoColor}>{selectedCompany.name.charAt(0)}</span>
-                      </div>
-                      <h1 className="font-display font-black text-3xl md:text-4xl text-white">
-                        {selectedCompany.name}
-                      </h1>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-white/65 leading-relaxed">
-                      {selectedCompany.desc}
-                    </p>
-
-                    <div className="pt-2">
-                      <a
-                        href="#questions-list"
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f97316] hover:bg-[#ea580c] text-white font-bold text-xs shadow-lg shadow-orange-500/20 transition-colors"
-                      >
-                        <Play size={14} /> Explore Questions
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center lg:items-end justify-center gap-2 shrink-0">
-                    <div className="text-[11px] font-mono text-white/40 flex items-center gap-1">
-                      <Clock size={13} /> Last Updated: {selectedCompany.lastUpdated}
-                    </div>
-                    <div className="w-24 h-24 rounded-full border-4 border-emerald-500/40 bg-emerald-500/5 flex flex-col items-center justify-center">
-                      <Unlock size={22} className="text-emerald-400" />
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold mt-1">Unlocked</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {['All Time Favourite', '45 Days', '6 Months', 'Interview BETA'].map((tab, idx) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                        idx === 0
-                          ? 'bg-[#f97316] text-white font-bold shadow-md shadow-orange-500/20'
-                          : idx === 3
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          : 'bg-[#0b0d14] text-white/70 border border-white/10 hover:bg-white/5'
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                  
-                  {/* Pattern Distribution Donut */}
-                  <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-4">
-                    <h3 className="font-display font-black text-white text-lg text-center">
-                      Interview Pattern Distribution
-                    </h3>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2">
-                      {selectedCompany.patterns.map((pat) => (
-                        <div key={pat.name} className="flex items-center justify-between p-2 rounded bg-white/[0.02] border border-white/5">
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pat.color }}></span>
-                            <span className="text-white/80 text-[11px] truncate">{pat.name}</span>
-                          </div>
-                          <span className="font-mono text-white/60 font-semibold text-[11px] shrink-0 ml-1">{pat.percentage}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Difficulty Distribution Ring */}
-                  <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 flex flex-col justify-between space-y-4">
-                    <h3 className="font-display font-black text-white text-lg text-center">
-                      Difficulty Wise Distribution
-                    </h3>
-
-                    <div className="flex items-center justify-center gap-8 py-4">
-                      <div className="w-32 h-32 rounded-full border-8 border-amber-400/80 border-t-emerald-400 border-r-red-400 flex flex-col items-center justify-center">
-                        <span className="font-display font-black text-3xl text-white">{selectedCompany.totalProblems}</span>
-                        <span className="text-[10px] font-mono text-white/40 uppercase">Total Problems</span>
-                      </div>
-
-                      <div className="space-y-3 font-mono text-xs">
-                        <div className="flex items-center gap-3">
-                          <span className="w-3 h-3 rounded-full bg-emerald-400"></span>
-                          <span className="text-white/70 w-16">Easy</span>
-                          <strong className="text-white text-sm">{selectedCompany.difficulty.easy}</strong>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="w-3 h-3 rounded-full bg-amber-400"></span>
-                          <span className="text-white/70 w-16">Medium</span>
-                          <strong className="text-white text-sm">{selectedCompany.difficulty.medium}</strong>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="w-3 h-3 rounded-full bg-red-400"></span>
-                          <span className="text-white/70 w-16">Hard</span>
-                          <strong className="text-white text-sm">{selectedCompany.difficulty.hard}</strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between text-xs">
-                      <span className="text-white/70">Practice verified problems with instant test runner</span>
-                      <Link
-                        to="/assessment"
-                        className="px-3 py-1.5 rounded-lg bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold text-xs transition-colors"
-                      >
-                        Take Quiz Now
-                      </Link>
-                    </div>
-                  </div>
-
-                </div>
-
-                <div id="questions-list" className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden">
-                  <div className="p-4 bg-white/[0.02] border-b border-white/10 flex items-center justify-between">
-                    <h3 className="font-bold text-white text-base">
-                      High-Frequency {selectedCompany.name} Interview Questions
-                    </h3>
-                    <span className="text-xs font-mono text-emerald-400 font-semibold">Click to solve on LeetCode</span>
-                  </div>
-
-                  <div className="divide-y divide-white/[0.04]">
-                    {selectedCompany.questions.map((q, idx) => (
-                      <div key={q.id} className="p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono text-white/40 w-5">{idx + 1}.</span>
+                ) : (
+                  <div className="space-y-4">
+                    {myApplications.map((app) => (
+                      <div key={app.id} className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-5 shadow-lg">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
                           <div>
-                            <a
-                              href={q.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs md:text-sm font-semibold text-white hover:text-amber-400 flex items-center gap-1.5 transition-colors"
-                            >
-                              <span>{q.title}</span>
-                              <ExternalLink size={13} className="text-white/40" />
-                            </a>
-                            <div className="text-[11px] text-white/40 font-mono mt-0.5">{q.topic}</div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono text-xs font-bold text-blue-400 uppercase">{app.challenge_company}</span>
+                              <span className="text-white/20">·</span>
+                              <span className="text-[11px] font-mono text-white/40">{app.domain || app.category}</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-white">{app.challenge_title}</h3>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold border ${getStatusColor(app.status)}`}>
+                              {app.status}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded font-bold ${
-                            q.diff === 'Easy' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            q.diff === 'Medium' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-red-500/10 text-red-400 border border-red-500/20'
-                          }`}>
-                            {q.diff}
-                          </span>
-                          <a
-                            href={q.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold"
+                        {/* Stepper */}
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] font-mono">
+                          {['Applied', 'Shortlisted', 'Challenge Assigned', 'Submitted', 'Evaluated', 'Selected'].map((st, i) => {
+                            const isDone =
+                              app.status === st ||
+                              (app.status === 'Submitted' && ['Applied', 'Shortlisted', 'Challenge Assigned', 'Submitted'].includes(st)) ||
+                              (app.status === 'Evaluated' && ['Applied', 'Shortlisted', 'Challenge Assigned', 'Submitted', 'Evaluated'].includes(st)) ||
+                              (['Selected', 'Internship Offered', 'Placement Offered'].includes(app.status));
+
+                            return (
+                              <div
+                                key={st}
+                                className={`p-2 rounded-lg border ${
+                                  isDone ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold' : 'border-white/5 bg-white/[0.02] text-white/30'
+                                }`}
+                              >
+                                <div className="text-[9px] text-white/40">{i + 1}</div>
+                                <div className="truncate">{st}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Recruiter Evaluation Card if present */}
+                        {app.evaluation && (
+                          <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="font-bold text-white text-xs font-mono uppercase flex items-center gap-1.5">
+                                <Award size={15} className="text-emerald-400" /> Recruiter Evaluation Scorecard
+                              </div>
+                              <span className="text-base font-black text-emerald-400 font-mono">
+                                {app.evaluation.overall_score}% Score ({app.evaluation.outcome})
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px] font-mono">
+                              <div className="p-2 rounded bg-black/40">Technical: {app.evaluation.tech_score}/100</div>
+                              <div className="p-2 rounded bg-black/40">Problem Solving: {app.evaluation.problem_solving_score}/100</div>
+                              <div className="p-2 rounded bg-black/40">Code Quality: {app.evaluation.code_quality_score}/100</div>
+                              <div className="p-2 rounded bg-black/40">Innovation: {app.evaluation.innovation_score}/100</div>
+                              <div className="p-2 rounded bg-black/40">Communication: {app.evaluation.communication_score}/100</div>
+                            </div>
+                            <p className="text-xs text-white/80"><strong className="text-emerald-300">Feedback: </strong>{app.evaluation.feedback}</p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs pt-2">
+                          <span className="text-white/40 font-mono">Match Score: <strong className="text-white">{app.match_score}%</strong></span>
+                          <Link
+                            to={`/challenges?id=${app.challenge_id}`}
+                            className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
                           >
-                            Solve
-                          </a>
+                            Open Challenge Details <ChevronRight size={13} />
+                          </Link>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-
+                )}
               </div>
             )}
 
-            {/* VIEW 2: CONTEST CALENDAR (Screenshot 2) */}
-            {(activeTab === 'contests' || activeTab === 'contests-calendar') && (
+            {/* VIEW: ENHANCED PORTFOLIO & SKILLS MANAGER */}
+            {activeTab === 'portfolio' && (
               <div className="space-y-6">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-                    Contest Calendar
-                  </h1>
-                  <p className="text-xs md:text-sm text-white/50 mt-1">
-                    Explore Coding Contests and never miss placement drives or competitive rounds
+                  <h1 className="text-2xl font-black text-white">Student Skill Profile & Portfolio</h1>
+                  <p className="text-xs text-white/50 mt-1">
+                    Manage your verified skills and claimed technologies. Changes dynamically update challenge match scores!
                   </p>
                 </div>
 
                 <div className="grid lg:grid-cols-12 gap-6">
-                  
-                  <div className="lg:col-span-5 space-y-4">
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={14} />
+                  {/* Left: Interactive Skills Editor */}
+                  <div className="lg:col-span-7 space-y-6">
+                    <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-5 shadow-lg">
+                      <h3 className="font-bold text-white text-base flex items-center gap-2">
+                        <Sparkles size={16} className="text-emerald-400" /> Technical Skills
+                      </h3>
+
+                      {/* Add Skill Input */}
+                      <form onSubmit={handleAddSkill} className="flex gap-2">
                         <Input
-                          placeholder="Search contest..."
-                          className="pl-9 bg-[#0b0d14] border-white/10 text-white text-xs rounded-xl h-9"
+                          placeholder="Add skill (e.g. OpenCV, Docker, PyTorch)..."
+                          value={newSkillInput}
+                          onChange={(e) => setNewSkillInput(e.target.value)}
+                          className="bg-[#07080d] border-white/10 text-white text-xs"
+                        />
+                        <Button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4">
+                          <Plus size={14} className="mr-1" /> Add
+                        </Button>
+                      </form>
+
+                      {/* Skills Chips */}
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {studentProfile.technical_skills?.map((sk) => (
+                          <span
+                            key={sk}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono border border-white/10 group"
+                          >
+                            <span>{sk}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSkill(sk)}
+                              className="text-white/40 hover:text-rose-400 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Academic & Career Info */}
+                    <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-4 shadow-lg">
+                      <h3 className="font-bold text-white text-base">Academic & Career Profile</h3>
+
+                      <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <Label className="text-white/70">Branch / Major</Label>
+                          <Input
+                            value={studentProfile.branch || ''}
+                            onChange={(e) => setStudentProfile({ ...studentProfile, branch: e.target.value })}
+                            className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/70">Current Year</Label>
+                          <select
+                            value={studentProfile.year || '3rd Year'}
+                            onChange={(e) => setStudentProfile({ ...studentProfile, year: e.target.value })}
+                            className="mt-1 w-full bg-[#07080d] border border-white/10 rounded-md p-2 text-white text-xs"
+                          >
+                            <option>1st Year</option>
+                            <option>2nd Year</option>
+                            <option>3rd Year</option>
+                            <option>4th Year</option>
+                            <option>Graduating</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-white/70">College / University</Label>
+                          <Input
+                            value={studentProfile.college || ''}
+                            onChange={(e) => setStudentProfile({ ...studentProfile, college: e.target.value })}
+                            className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/70">CGPA / Percentage</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={studentProfile.cgpa || 8.5}
+                            onChange={(e) => setStudentProfile({ ...studentProfile, cgpa: Number(e.target.value) })}
+                            className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-white/70">GitHub Profile URL</Label>
+                        <Input
+                          placeholder="https://github.com/your-username"
+                          value={studentProfile.github_url || ''}
+                          onChange={(e) => setStudentProfile({ ...studentProfile, github_url: e.target.value })}
+                          className="mt-1 bg-[#07080d] border-white/10 text-white text-xs font-mono"
                         />
                       </div>
-                      <Button className="bg-[#0b0d14] hover:bg-white/5 text-white border border-white/10 text-xs h-9">
-                        <Filter size={13} className="mr-1" /> Filters
-                      </Button>
-                    </div>
 
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
-                      <div className="text-xs font-bold text-white uppercase tracking-wider font-mono text-white/50">Today</div>
-                      {CONTESTS_DATA.filter((c) => c.dateGroup === 'Today').map((contest) => (
-                        <div key={contest.id} className="p-4 rounded-xl border border-white/10 bg-[#0b0d14] space-y-3 hover:border-amber-400/40 transition-colors">
-                          <div className="flex items-center justify-between text-xs font-mono">
-                            <span className="text-emerald-400 font-semibold">{contest.time}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleSubscribeContest(contest.id, contest.title)}
-                              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                                subscribedContests[contest.id]
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                  : 'text-white/60 hover:text-white bg-white/5'
-                              }`}
-                            >
-                              {subscribedContests[contest.id] ? '✓ Subscribed' : 'Subscribe'}
-                            </button>
-                          </div>
-
-                          <div className="font-bold text-white text-sm">
-                            <a href={contest.link} target={contest.link.startsWith('http') ? '_blank' : '_self'} rel="noreferrer" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-                              <span>{contest.title}</span>
-                              <ExternalLink size={12} className="text-white/40" />
-                            </a>
-                          </div>
-
-                          <div className="text-[11px] font-mono text-white/40 flex items-center gap-1.5">
-                            <UserCheck size={13} /> {contest.subscribers} users subscribed
-                          </div>
-                        </div>
-                      ))}
-
-                      <div className="text-xs font-bold text-white uppercase tracking-wider font-mono text-white/50 pt-2">Upcoming (29 - 31 Aug 2026)</div>
-                      {CONTESTS_DATA.filter((c) => c.dateGroup !== 'Today').map((contest) => (
-                        <div key={contest.id} className="p-4 rounded-xl border border-white/10 bg-[#0b0d14] space-y-3 hover:border-amber-400/40 transition-colors">
-                          <div className="flex items-center justify-between text-xs font-mono">
-                            <span className="text-blue-400 font-semibold">{contest.time} · {contest.dateGroup}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleSubscribeContest(contest.id, contest.title)}
-                              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                                subscribedContests[contest.id]
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                  : 'text-white/60 hover:text-white bg-white/5'
-                              }`}
-                            >
-                              {subscribedContests[contest.id] ? '✓ Subscribed' : 'Subscribe'}
-                            </button>
-                          </div>
-
-                          <div className="font-bold text-white text-sm">
-                            <a href={contest.link} target="_blank" rel="noreferrer" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-                              <span>{contest.title}</span>
-                              <ExternalLink size={12} className="text-white/40" />
-                            </a>
-                          </div>
-
-                          <div className="text-[11px] font-mono text-white/40 flex items-center gap-1.5">
-                            <UserCheck size={13} /> {contest.subscribers} users subscribed
-                          </div>
-                        </div>
-                      ))}
+                      <div className="pt-3 border-t border-white/10 flex justify-end">
+                        <Button
+                          onClick={handleSaveStudentProfile}
+                          disabled={profileSaving}
+                          className="bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs px-6"
+                        >
+                          {profileSaving ? <Loader2 size={14} className="animate-spin" /> : 'Save Skill Profile'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="lg:col-span-7 rounded-2xl border border-white/10 bg-[#0b0d14] p-6 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
-                      <h3 className="font-display font-black text-xl text-white">August 2026</h3>
-                      <div className="flex items-center gap-2">
-                        <button className="px-3 py-1 rounded-lg bg-white/10 text-xs font-semibold text-white">Today</button>
-                        <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/10 text-xs">
-                          <button className="px-2.5 py-1 rounded-md bg-[#f97316] text-white font-bold">Month</button>
-                          <button className="px-2.5 py-1 rounded-md text-white/60 hover:text-white">Week</button>
-                          <button className="px-2.5 py-1 rounded-md text-white/60 hover:text-white">Day</button>
+                  {/* Right: Verified Badges & Trust Card */}
+                  <div className="lg:col-span-5 space-y-6">
+                    <div className="rounded-2xl border border-blue-500/30 bg-[#0f121a] p-6 space-y-5 shadow-2xl">
+                      <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-emerald-400 flex items-center justify-center font-black text-white text-xl">
+                            {(user?.name || 'U').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h2 className="text-base font-black text-white">{user?.name}</h2>
+                            <p className="text-xs text-white/50 font-mono">{user?.email}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-mono text-white/40 uppercase">Trust Score</div>
+                          <div className="text-xl font-black text-emerald-400">{stats.trust_score}/100</div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-7 gap-1 text-center font-mono text-xs">
-                      {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
-                        <div key={day} className="p-2 text-white/40 font-bold text-[11px]">{day}</div>
-                      ))}
-                      {[
-                        { d: 26, contests: ['Weekend D...', 'Codeforces'] },
-                        { d: 27, contests: ['Monday M...'] },
-                        { d: 28, contests: [] },
-                        { d: 29, contests: ['Starters 253'] },
-                        { d: 30, contests: [] },
-                        { d: 31, contests: ['Placement Drive'] },
-                        { d: 1, contests: ['AtCoder'] },
-                        { d: 2, contests: [] },
-                        { d: 3, contests: ['Weekly Co...'] },
-                        { d: 4, contests: [] },
-                        { d: 5, contests: ['Starters 250'] },
-                        { d: 6, contests: ['Codeforces'] },
-                        { d: 7, contests: ['Educational...'] },
-                        { d: 8, contests: [] }
-                      ].map((cell, idx) => (
-                        <div key={idx} className="min-h-[75px] rounded-lg bg-white/[0.01] border border-white/5 p-1.5 flex flex-col justify-between text-left hover:bg-white/[0.03] transition-colors">
-                          <span className="text-[10px] font-bold text-white/60">{cell.d}</span>
-                          <div className="space-y-1 mt-1">
-                            {cell.contests.map((c, i) => (
-                              <div key={i} className="text-[9px] px-1 py-0.5 rounded bg-orange-500/20 text-orange-300 truncate font-mono border border-orange-500/30">
-                                {c}
-                              </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono mb-2">Verified Assessment Badges</h4>
+                        {stats.verified_skills?.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {stats.verified_skills.map((vs, idx) => (
+                              <span key={idx} className="px-3 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5">
+                                <CheckCircle2 size={13} /> {vs.skill} ({vs.score}%)
+                              </span>
                             ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 3: LEADERBOARD (Screenshot 3) */}
-            {activeTab === 'leaderboard' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">Leaderboard</h1>
-                    <p className="text-xs text-white/50 mt-1">Global campus ranks based on verified skill scores and coding challenges</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toast({ title: 'Leaderboard Scoring System', description: 'Calculated using verified test scores, problem accuracy, and GitHub repositories.' })}
-                    className="text-xs text-blue-400 hover:underline font-mono cursor-pointer"
-                  >
-                    How It Works?
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {['C Score', 'Total Questions', 'Leetcode Rating', 'Codeforces Rating'].map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setLeaderboardTab(tab)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        leaderboardTab === tab
-                          ? 'bg-[#f97316] text-white font-bold shadow-md shadow-orange-500/20'
-                          : 'bg-[#0b0d14] text-white/70 border border-white/10 hover:bg-white/5'
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid md:grid-cols-3 gap-4 items-end">
-                  <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-5 space-y-3 relative overflow-hidden">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <img src={LEADERBOARD_RANKERS[1].avatar} alt="" className="w-10 h-10 rounded-full bg-white/10" />
-                        <div>
-                          <h4 className="font-bold text-white text-sm">{LEADERBOARD_RANKERS[1].name}</h4>
-                          <span className="text-[11px] text-white/40 font-mono">{LEADERBOARD_RANKERS[1].handle}</span>
-                        </div>
+                        ) : (
+                          <p className="text-xs text-white/40">No quizzes passed yet. Take assessments to earn verified skill badges.</p>
+                        )}
                       </div>
-                      <span className="text-xl">🥈</span>
-                    </div>
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between font-mono">
-                      <div>
-                        <span className="text-[10px] text-white/40 block">C Score</span>
-                        <strong className="text-white text-lg">{LEADERBOARD_RANKERS[1].score}</strong>
-                      </div>
-                      <span className="text-xs font-bold text-white/60">Rank: #2</span>
-                    </div>
-                  </div>
 
-                  <div className="rounded-2xl border-2 border-amber-400 bg-[#0f1422] p-6 space-y-3 relative overflow-hidden shadow-2xl shadow-amber-500/10 md:-translate-y-2">
-                    <div className="absolute top-2 right-2 text-3xl">🥇</div>
-                    <div className="flex items-center gap-3">
-                      <img src={LEADERBOARD_RANKERS[0].avatar} alt="" className="w-12 h-12 rounded-full bg-amber-400/20 border border-amber-400" />
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <h4 className="font-black text-white text-base">{LEADERBOARD_RANKERS[0].name}</h4>
-                          <span className="text-amber-400">👑</span>
-                        </div>
-                        <span className="text-[11px] text-amber-300 font-mono">{LEADERBOARD_RANKERS[0].handle}</span>
+                      <div className="pt-3 border-t border-white/10">
+                        <Link
+                          to="/assessment"
+                          className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
+                        >
+                          <Zap size={14} /> Take Proctored Skill Assessment
+                        </Link>
                       </div>
                     </div>
-                    <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono">
-                      <div>
-                        <span className="text-[10px] text-amber-300/60 block uppercase tracking-widest">Top C Score</span>
-                        <strong className="text-amber-400 text-2xl">{LEADERBOARD_RANKERS[0].score}</strong>
-                      </div>
-                      <span className="text-xs font-black text-amber-400 bg-amber-400/20 px-2 py-1 rounded">Rank: #1</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-[#0b0d14] p-5 space-y-3 relative overflow-hidden">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <img src={LEADERBOARD_RANKERS[2].avatar} alt="" className="w-10 h-10 rounded-full bg-white/10" />
-                        <div>
-                          <h4 className="font-bold text-white text-sm">{LEADERBOARD_RANKERS[2].name}</h4>
-                          <span className="text-[11px] text-white/40 font-mono">{LEADERBOARD_RANKERS[2].handle}</span>
-                        </div>
-                      </div>
-                      <span className="text-xl">🥉</span>
-                    </div>
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between font-mono">
-                      <div>
-                        <span className="text-[10px] text-white/40 block">C Score</span>
-                        <strong className="text-white text-lg">{LEADERBOARD_RANKERS[2].score}</strong>
-                      </div>
-                      <span className="text-xs font-bold text-white/60">Rank: #3</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-blue-500/30 bg-[#0b1020] p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
-                      <Plus size={18} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-white text-sm">Link your platforms to get ranked</h4>
-                      <p className="text-xs text-white/50 mt-0.5">Connect LeetCode, Codeforces, and GitHub profiles to track cross-platform scores.</p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => setShowConnectModal(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 shrink-0"
-                  >
-                    Connect Platforms <ChevronRight size={14} className="ml-1" />
-                  </Button>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden">
-                  <div className="p-4 bg-white/[0.02] border-b border-white/10">
-                    <h3 className="font-bold text-white text-base">Global Ranking (Cumulative)</h3>
-                    <p className="text-xs text-white/50 mt-0.5">Ranks coders based on verified skill tests, DSA accuracy, and development challenges.</p>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs md:text-sm">
-                      <thead className="bg-[#08090e] border-b border-white/10 text-white/50 font-mono text-[11px] uppercase tracking-wider">
-                        <tr>
-                          <th className="p-4">Rank</th>
-                          <th className="p-4">User Name</th>
-                          <th className="p-4">Institution / College</th>
-                          <th className="p-4 text-right">C Score</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.04]">
-                        {LEADERBOARD_RANKERS.map((r) => (
-                          <tr key={r.rank} className="hover:bg-white/[0.02] transition-colors">
-                            <td className="p-4 font-mono font-bold">
-                              {r.rank === 1 ? '🥇 #1' : r.rank === 2 ? '🥈 #2' : r.rank === 3 ? '🥉 #3' : `#${r.rank}`}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-2.5">
-                                <img src={r.avatar} alt="" className="w-7 h-7 rounded-full bg-white/10" />
-                                <div>
-                                  <div className="font-bold text-white">{r.name}</div>
-                                  <span className="text-[11px] text-white/40 font-mono">{r.handle}</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 text-white/70 text-xs">{r.institution}</td>
-                            <td className="p-4 text-right font-mono font-bold text-amber-400 text-sm">{r.score}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* VIEW 4: MY SHEETS (Curriculum Checklist & 9 Pillars) */}
+            {/* VIEW: MY SHEETS (Curriculum Checklist & 9 Pillars) */}
             {activeTab === 'my-sheets' && (
               <div className="space-y-8">
                 
+                {/* Hero */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
-                      <span>My Sheets</span>
+                      <span>My Sheets & Placement Hub</span>
                     </h1>
                     <p className="text-xs md:text-sm text-white/50 mt-1">
                       Based on your personal and followed placement roadmaps & skill sheets
@@ -1221,6 +1297,39 @@ const Dashboard = () => {
                   </div>
                 </div>
 
+                {/* RECOMMENDED CHALLENGES WIDGET */}
+                {recommendedChallenges.length > 0 && (
+                  <div className="rounded-2xl border border-emerald-500/30 bg-[#0c101a] p-6 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={16} className="text-emerald-400" />
+                        <h3 className="font-bold text-white text-base font-mono uppercase">Top Matched Challenges For You</h3>
+                      </div>
+                      <Link to="/challenges" className="text-xs text-emerald-400 hover:underline font-mono">
+                        View All ({recommendedChallenges.length}) →
+                      </Link>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {recommendedChallenges.slice(0, 3).map((rc) => (
+                        <Link
+                          key={rc.id}
+                          to={`/challenges?id=${rc.id}`}
+                          className="p-4 rounded-xl bg-black/40 border border-white/5 hover:border-emerald-400/40 transition-all space-y-2 group"
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-mono text-blue-400 font-semibold">{rc.company}</span>
+                            <span className="text-xs font-mono text-emerald-400 font-bold">{rc.match_score}% Match</span>
+                          </div>
+                          <h4 className="font-bold text-white text-xs group-hover:text-emerald-300 line-clamp-1">{rc.title}</h4>
+                          <p className="text-[11px] text-white/50 line-clamp-2">{rc.description || rc.problem_statement}</p>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Followed Sheets */}
                 <div className="space-y-3.5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-base font-bold text-white tracking-tight">Followed Sheets</h2>
@@ -1308,48 +1417,7 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="space-y-3.5">
-                  <h2 className="text-base font-bold text-white tracking-tight">Custom Sheets</h2>
-
-                  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateSheetModal(true)}
-                      className="rounded-xl border-2 border-dashed border-white/20 hover:border-amber-400/60 bg-white/[0.01] hover:bg-amber-400/[0.03] p-8 flex flex-col items-center justify-center gap-3 transition-all group min-h-[160px] cursor-pointer"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-amber-500/10 group-hover:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 transition-transform group-hover:scale-110">
-                        <Plus size={24} />
-                      </div>
-                      <span className="text-sm font-semibold text-white/80 group-hover:text-amber-300">
-                        Create a new sheet
-                      </span>
-                    </button>
-
-                    {customSheets.map((cs) => (
-                      <div key={cs.id} className="rounded-xl border border-white/10 bg-[#0f121a] p-5 flex flex-col justify-between space-y-3">
-                        <div>
-                          <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">{cs.created}</div>
-                          <h4 className="font-bold text-white text-base mt-1">{cs.title}</h4>
-                          <p className="text-xs text-white/50 mt-1 line-clamp-2">{cs.desc}</p>
-                        </div>
-                        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-                          <span className="font-mono text-emerald-400">Custom Sheet</span>
-                          <button
-                            onClick={() => {
-                              const updated = customSheets.filter((x) => x.id !== cs.id);
-                              setCustomSheets(updated);
-                              localStorage.setItem('ltc_custom_sheets', JSON.stringify(updated));
-                            }}
-                            className="text-red-400 hover:text-red-300 text-[11px] cursor-pointer"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
+                {/* 9 Pillars Checklist Table */}
                 <div id="roadmap-table" className="pt-4 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                     <div>
@@ -1443,80 +1511,146 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* VIEW 5: PORTFOLIO & VERIFIED CARD */}
-            {activeTab === 'portfolio' && (
+            {/* VIEW: EXPLORE SHEETS / COMPANY KITS */}
+            {(activeTab === 'explore-sheets' || activeTab === 'company-kit') && !selectedCompany && (
               <div className="space-y-6">
                 <div>
-                  <h1 className="text-2xl font-black text-white">Verified Candidate Portfolio</h1>
-                  <p className="text-xs text-white/50 mt-1">Cryptographically signed skill proofs and anti-cheat verified scores.</p>
+                  <h1 className="text-2xl md:text-3xl font-black text-white">Track Coding Sheets in One Place</h1>
+                  <p className="text-xs md:text-sm text-white/50 mt-1">Choose from 30+ structured coding paths, company kits, and placement roadmaps</p>
                 </div>
 
-                <div className="max-w-2xl rounded-2xl border border-blue-500/30 bg-[#0f121a] p-8 space-y-6 shadow-2xl">
-                  <div className="flex items-center justify-between pb-6 border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-emerald-400 flex items-center justify-center font-black text-white text-xl">
-                        {(user?.name || 'U').charAt(0).toUpperCase()}
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {Object.values(COMPANY_SHEETS).map((sheet) => (
+                    <div
+                      key={sheet.id}
+                      onClick={() => setSelectedCompanyId(sheet.id)}
+                      className="p-5 rounded-xl border border-white/10 bg-[#0b0d14] hover:border-amber-400/50 transition-all cursor-pointer space-y-3 shadow-lg"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-white text-base">{sheet.name}</h3>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-white/60">{sheet.tag}</span>
                       </div>
-                      <div>
-                        <h2 className="text-xl font-black text-white">{user?.name}</h2>
-                        <p className="text-xs text-white/50 font-mono">{user?.email}</p>
+                      <p className="text-xs text-white/50 line-clamp-2">{sheet.desc}</p>
+                      <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-white/5">
+                        <span className="text-amber-400 font-bold">{sheet.totalProblems} Problems</span>
+                        <span className="text-blue-400 flex items-center gap-1">Open Kit <ChevronRight size={13} /></span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Trust Score</div>
-                      <div className="text-2xl font-black text-emerald-400">{stats.trust_score}/100</div>
-                    </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="p-3 rounded-lg bg-black/40 border border-white/5">
-                      <div className="text-lg font-bold text-white">{stats.verified_skills_count}</div>
-                      <div className="text-[10px] text-white/50 font-mono">Verified Skills</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-black/40 border border-white/5">
-                      <div className="text-lg font-bold text-blue-400">{stats.skill_readiness}%</div>
-                      <div className="text-[10px] text-white/50 font-mono">Skill Readiness</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-black/40 border border-white/5">
-                      <div className="text-lg font-bold text-amber-400">{stats.challenges_solved}</div>
-                      <div className="text-[10px] text-white/50 font-mono">Challenges</div>
-                    </div>
-                  </div>
+            {/* VIEW: COMPANY DETAIL */}
+            {selectedCompany && (
+              <div className="space-y-6">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCompanyId(null)}
+                  className="text-xs text-white/50 hover:text-white flex items-center gap-1 font-mono cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Back to All Kits
+                </button>
 
-                  <div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono mb-2">Verified Skill Badges</h4>
-                    {stats.verified_skills?.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {stats.verified_skills.map((vs, idx) => (
-                          <span key={idx} className="px-3 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5">
-                            <CheckCircle2 size={13} /> {vs.skill} ({vs.score}%)
-                          </span>
-                        ))}
+                <div className="p-6 rounded-2xl border border-white/10 bg-[#0b0d14] space-y-3">
+                  <h2 className="text-2xl font-black text-white">{selectedCompany.name} Interview Sheet</h2>
+                  <p className="text-xs text-white/60">{selectedCompany.desc}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden">
+                  <div className="p-4 bg-white/[0.02] border-b border-white/10">
+                    <h3 className="font-bold text-white text-base">Questions & LeetCode Links</h3>
+                  </div>
+                  <div className="divide-y divide-white/[0.04]">
+                    {selectedCompany.questions.map((q, idx) => (
+                      <div key={q.id} className="p-4 flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-3">
+                          <span className="text-white/40 font-mono w-5">{idx + 1}.</span>
+                          <div>
+                            <a href={q.link} target="_blank" rel="noreferrer" className="font-semibold text-white hover:text-amber-400 flex items-center gap-1.5">
+                              <span>{q.title}</span>
+                              <ExternalLink size={12} className="text-white/40" />
+                            </a>
+                            <span className="text-[10px] text-white/40 font-mono">{q.topic}</span>
+                          </div>
+                        </div>
+                        <a href={q.link} target="_blank" rel="noreferrer" className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-white font-semibold">
+                          Solve
+                        </a>
                       </div>
-                    ) : (
-                      <p className="text-xs text-white/40">No quizzes passed yet. Take assessments to earn verified skill badges.</p>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* VIEW 6: WORKSPACE */}
+            {/* VIEW: CONTESTS */}
+            {(activeTab === 'contests' || activeTab === 'contests-calendar') && (
+              <div className="space-y-6">
+                <h1 className="text-2xl font-black text-white">Contest Calendar</h1>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {CONTESTS_DATA.map((contest) => (
+                    <div key={contest.id} className="p-5 rounded-xl border border-white/10 bg-[#0b0d14] space-y-3">
+                      <div className="flex justify-between items-center text-xs font-mono">
+                        <span className="text-emerald-400 font-bold">{contest.platform}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSubscribeContest(contest.id, contest.title)}
+                          className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-white text-xs"
+                        >
+                          {subscribedContests[contest.id] ? '✓ Subscribed' : 'Subscribe'}
+                        </button>
+                      </div>
+                      <h3 className="font-bold text-white text-sm">{contest.title}</h3>
+                      <div className="text-xs text-white/50 font-mono">{contest.time} ({contest.duration})</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW: LEADERBOARD */}
+            {activeTab === 'leaderboard' && (
+              <div className="space-y-6">
+                <h1 className="text-2xl font-black text-white">Campus Skill & Placement Leaderboard</h1>
+                <div className="rounded-2xl border border-white/10 bg-[#0b0d14] overflow-hidden">
+                  <table className="w-full text-left text-xs md:text-sm">
+                    <thead className="bg-[#08090e] border-b border-white/10 text-white/50 font-mono text-[11px] uppercase">
+                      <tr>
+                        <th className="p-4">Rank</th>
+                        <th className="p-4">Candidate</th>
+                        <th className="p-4">College</th>
+                        <th className="p-4 text-right">Trust Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04]">
+                      {LEADERBOARD_RANKERS.map((r) => (
+                        <tr key={r.rank}>
+                          <td className="p-4 font-mono font-bold">#{r.rank}</td>
+                          <td className="p-4 font-bold text-white">{r.name}</td>
+                          <td className="p-4 text-white/70">{r.institution}</td>
+                          <td className="p-4 text-right font-mono font-bold text-amber-400">{r.score}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW: WORKSPACE */}
             {activeTab === 'workspace' && (
               <div className="space-y-6">
                 <h1 className="text-2xl font-black text-white">My Workspace & Scratchpad</h1>
-                <p className="text-xs text-white/50">Write code solutions and technical notes.</p>
-                <div className="rounded-xl border border-white/10 bg-[#0b0d14] p-4">
-                  <textarea
-                    rows={12}
-                    defaultValue="// 📝 LinktoCompany Code & Notes Scratchpad\n// Track your algorithm solutions, SQL notes, and interview prep here.\n\nfunction solve() {\n  console.log('Practicing DSA');\n}"
-                    className="w-full bg-[#07080c] p-3 text-white font-mono text-xs focus:outline-none rounded"
-                  />
-                </div>
+                <textarea
+                  rows={10}
+                  defaultValue="// LinktoCompany Scratchpad\n// Track your algorithm solutions, SQL notes, and interview prep here.\n\nfunction solve() {\n  console.log('Practicing DSA');\n}"
+                  className="w-full bg-[#0b0d14] border border-white/10 p-4 text-white font-mono text-xs focus:outline-none rounded-xl"
+                />
               </div>
             )}
 
-            {/* VIEW 7: NOTES */}
+            {/* VIEW: NOTES */}
             {activeTab === 'notes' && (
               <div className="space-y-6">
                 <h1 className="text-2xl font-black text-white">Interview Notes & Quick Revision</h1>
@@ -1526,24 +1660,21 @@ const Dashboard = () => {
                     <p>• Binary Search: O(log n)</p>
                     <p>• MergeSort / QuickSort: O(n log n)</p>
                     <p>• HashMap Lookup: O(1) avg</p>
-                    <p>• Graph BFS/DFS: O(V + E)</p>
                   </div>
                   <div className="p-5 rounded-xl border border-white/10 bg-[#0b0d14] space-y-2">
                     <h3 className="font-bold text-white text-sm">ACID Properties in SQL</h3>
                     <p>• Atomicity: All or nothing execution</p>
                     <p>• Consistency: Preserves schema invariants</p>
                     <p>• Isolation: Concurrent transactions do not conflict</p>
-                    <p>• Durability: Persists commits across power failure</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* VIEW 8: TEACHER & RECRUITER INTERACTION */}
+            {/* VIEW: TEACHER & RECRUITER INTERACTION */}
             {activeTab === 'interaction' && (
               <div className="space-y-6">
                 <h1 className="text-2xl font-black text-white">Teacher & Recruiter Interaction</h1>
-                <p className="text-xs text-white/50">Scheduled technical interviews (Google Meet) & mentorship feedback.</p>
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="rounded-xl border border-white/10 bg-[#0b0d14] p-5 space-y-3">
                     <h3 className="font-bold text-white text-base flex items-center gap-2">
@@ -1551,35 +1682,14 @@ const Dashboard = () => {
                     </h3>
                     {stats.interviews?.length > 0 ? (
                       stats.interviews.map((iv) => (
-                        <div key={iv.id} className="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
-                          <div className="flex justify-between text-xs font-mono">
-                            <span className="text-emerald-400 font-bold">{iv.role_title}</span>
-                            <span className="text-white/40">{iv.date_time}</span>
-                          </div>
-                          <div className="text-xs text-white/70">Company: <strong>{iv.company_name}</strong></div>
-                          <a href={iv.meet_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold mt-1">
-                            <Video size={12} /> Join Google Meet
-                          </a>
+                        <div key={iv.id} className="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 space-y-1 text-xs">
+                          <div className="font-bold text-white">{iv.role_title} ({iv.company_name})</div>
+                          <div className="text-white/50">{iv.date_time}</div>
+                          <a href={iv.meet_link} target="_blank" rel="noreferrer" className="text-blue-400 underline block mt-1">Join Google Meet</a>
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-white/40 py-3">No scheduled interviews yet. Score $\ge 80\%$ on quizzes to receive recruiter interview calls.</p>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-[#0b0d14] p-5 space-y-3">
-                    <h3 className="font-bold text-white text-base flex items-center gap-2">
-                      <MessageSquare size={16} className="text-blue-400" /> Mentor & Recruiter Notes
-                    </h3>
-                    {stats.endorsements?.length > 0 ? (
-                      stats.endorsements.map((e) => (
-                        <div key={e.id} className="p-3 rounded-lg border border-white/10 bg-black/30 space-y-1 text-xs">
-                          <div className="font-bold text-white">{e.author_name} ({e.author_role})</div>
-                          <p className="text-white/70">"{e.message}"</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-white/40 py-3">No mentorship feedback yet.</p>
+                      <p className="text-xs text-white/40">No scheduled interviews yet.</p>
                     )}
                   </div>
                 </div>
@@ -1588,21 +1698,43 @@ const Dashboard = () => {
           </>
         )}
 
-        {/* SHARED VIEW: HELP CENTER & FEEDBACK */}
+        {/* ========================================================================= */}
+        {/* SHARED VIEW: TALENTS */}
+        {/* ========================================================================= */}
+        {activeTab === 'talents' && (
+          <div className="space-y-6">
+            <h1 className="text-2xl font-black text-white">Verified Talent Pool</h1>
+            <div className="grid md:grid-cols-3 gap-4">
+              {talents.map((t) => (
+                <div key={t.id} className="rounded-xl border border-white/10 bg-[#0b0d14] p-5 space-y-3">
+                  <h4 className="font-bold text-white">{t.name}</h4>
+                  <p className="text-xs text-white/50 font-mono">{t.email}</p>
+                  <div className="text-xs font-mono text-emerald-400">Trust: {t.trust_score}/100</div>
+                  {isCompany && (
+                    <Button
+                      onClick={() => {
+                        setSelectedTalent(t);
+                        setShowScheduleModal(true);
+                      }}
+                      className="w-full bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-semibold py-1.5"
+                    >
+                      Schedule Interview
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* SHARED VIEW: HELP & FEEDBACK */}
         {(activeTab === 'help' || activeTab === 'feedback') && (
           <div className="space-y-6 max-w-2xl">
-            <div>
-              <h1 className="text-2xl font-black text-white">Help Center & Support</h1>
-              <p className="text-xs text-white/50 mt-1">Frequently asked questions and platform support.</p>
-            </div>
+            <h1 className="text-2xl font-black text-white">Help Center & Support</h1>
             <div className="p-6 rounded-xl border border-white/10 bg-[#0b0d14] space-y-4 text-xs text-white/75">
               <div>
                 <strong className="text-white block mb-1">How do I verify skills on LinktoCompany?</strong>
                 <p>Click "Skill Assessments" in the sidebar, select a skill (DSA, JavaScript, SQL, CS Core), and score $\ge 70\%$ to earn a verified badge.</p>
-              </div>
-              <div>
-                <strong className="text-white block mb-1">How do recruiters schedule interviews?</strong>
-                <p>Recruiters browse the verified candidate pool and send calendar invites with Google Meet links directly to your email and dashboard.</p>
               </div>
             </div>
           </div>
@@ -1610,7 +1742,124 @@ const Dashboard = () => {
 
       </div>
 
-      {/* SCHEDULE INTERVIEW MODAL (For Company/Recruiter) */}
+      {/* ========================================================================= */}
+      {/* RECRUITER EVALUATION MODAL */}
+      {/* ========================================================================= */}
+      {evaluatingApp && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-[#0b0e16] border border-white/20 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Award size={18} className="text-emerald-400" /> Multi-Criteria Evaluation Scorecard
+                </h3>
+                <p className="text-xs text-white/50">Scoring: {evaluatingApp.user_name} ({evaluatingApp.user_email})</p>
+              </div>
+              <button onClick={() => setEvaluatingApp(null)} className="text-white/60 hover:text-white p-1">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEvaluation} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 font-mono">
+                <div>
+                  <Label className="text-[11px] text-white/80">Technical Skills (0-100) (30%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalForm.tech_score}
+                    onChange={(e) => setEvalForm({ ...evalForm, tech_score: Number(e.target.value) })}
+                    className="mt-1 bg-[#070910] border-white/10 text-white text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-white/80">Problem Solving (0-100) (25%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalForm.problem_solving_score}
+                    onChange={(e) => setEvalForm({ ...evalForm, problem_solving_score: Number(e.target.value) })}
+                    className="mt-1 bg-[#070910] border-white/10 text-white text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-white/80">Code Quality & Modular (20%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalForm.code_quality_score}
+                    onChange={(e) => setEvalForm({ ...evalForm, code_quality_score: Number(e.target.value) })}
+                    className="mt-1 bg-[#070910] border-white/10 text-white text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-white/80">Innovation & Usability (15%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalForm.innovation_score}
+                    onChange={(e) => setEvalForm({ ...evalForm, innovation_score: Number(e.target.value) })}
+                    className="mt-1 bg-[#070910] border-white/10 text-white text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-white/80 font-mono">Communication & Demo (10%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={evalForm.communication_score}
+                  onChange={(e) => setEvalForm({ ...evalForm, communication_score: Number(e.target.value) })}
+                  className="mt-1 bg-[#070910] border-white/10 text-white text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-white/80">Hiring Outcome Decision</Label>
+                <select
+                  value={evalForm.outcome}
+                  onChange={(e) => setEvalForm({ ...evalForm, outcome: e.target.value })}
+                  className="mt-1 w-full bg-[#070910] border border-white/10 rounded p-2 text-white text-xs"
+                >
+                  <option value="Selected">Selected</option>
+                  <option value="Internship Offered">Internship Offered</option>
+                  <option value="Placement Offered">Placement Offered</option>
+                  <option value="Shortlisted">Shortlisted for Next Round</option>
+                  <option value="Needs Improvement">Needs Improvement</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-white/80">Recruiter Feedback / Notes for Candidate</Label>
+                <textarea
+                  rows={3}
+                  value={evalForm.feedback}
+                  onChange={(e) => setEvalForm({ ...evalForm, feedback: e.target.value })}
+                  className="mt-1 w-full bg-[#070910] border border-white/10 rounded p-2 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+                <Button type="button" variant="ghost" onClick={() => setEvaluatingApp(null)} className="text-xs text-white/60">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submittingEval} className="bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs px-6">
+                  {submittingEval ? <Loader2 size={14} className="animate-spin" /> : 'Submit Scorecard & Notify Student'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SCHEDULE INTERVIEW MODAL */}
       {showScheduleModal && selectedTalent && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-[#0f121a] border border-white/20 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -1653,16 +1902,6 @@ const Dashboard = () => {
                 />
               </div>
 
-              <div>
-                <Label className="text-xs text-white/80">Notes for Candidate</Label>
-                <Input
-                  value={scheduleForm.notes}
-                  onChange={(e) => setScheduleForm({ ...scheduleForm, notes: e.target.value })}
-                  placeholder="e.g. Please be ready with your code editor."
-                  className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
-                />
-              </div>
-
               <div className="flex gap-2 pt-2">
                 <Button type="button" onClick={() => setShowScheduleModal(false)} className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs">
                   Cancel
@@ -1694,15 +1933,6 @@ const Dashboard = () => {
                   className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
                 />
               </div>
-              <div>
-                <Label className="text-xs text-white/80">Description</Label>
-                <Input
-                  value={newSheetDesc}
-                  onChange={(e) => setNewSheetDesc(e.target.value)}
-                  placeholder="e.g. High priority DSA questions for Amazon"
-                  className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
-                />
-              </div>
               <div className="flex gap-2 pt-2">
                 <Button type="button" onClick={() => setShowCreateSheetModal(false)} className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs">
                   Cancel
@@ -1716,76 +1946,20 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* CONNECT PLATFORMS MODAL */}
-      {showConnectModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#0f121a] border border-white/20 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Plus size={18} className="text-blue-400" /> Connect Coding Platforms
-            </h3>
-            <p className="text-xs text-white/50">Link your profiles to aggregate your ratings and rank on the global campus leaderboard.</p>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs text-white/80">LeetCode Username</Label>
-                <Input
-                  value={platformHandles.leetcode}
-                  onChange={(e) => setPlatformHandles({ ...platformHandles, leetcode: e.target.value })}
-                  placeholder="e.g. tour_de_code"
-                  className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-white/80">Codeforces Handle</Label>
-                <Input
-                  value={platformHandles.codeforces}
-                  onChange={(e) => setPlatformHandles({ ...platformHandles, codeforces: e.target.value })}
-                  placeholder="e.g. candidate_master"
-                  className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-white/80">GitHub Profile URL</Label>
-                <Input
-                  value={platformHandles.github}
-                  onChange={(e) => setPlatformHandles({ ...platformHandles, github: e.target.value })}
-                  placeholder="https://github.com/your-username"
-                  className="bg-[#07080c] border-white/10 text-white mt-1 text-xs"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="button" onClick={() => setShowConnectModal(false)} className="flex-1 bg-white/10 text-white text-xs">
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowConnectModal(false);
-                  toast({ title: 'Platforms Connected!', description: 'Your coding ratings are now synced to the Leaderboard.' });
-                }}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs"
-              >
-                Save & Sync
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* TOUR MODAL */}
       {showTourModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-[#0f121a] border border-white/20 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <BookOpen size={18} className="text-amber-400" /> Welcome to LinktoCompany Placement Portal!
+              <BookOpen size={18} className="text-amber-400" /> Welcome to LinktoCompany!
             </h3>
             <div className="space-y-3 text-xs text-white/70">
-              <p>1. <strong>Track Coding Sheets:</strong> Click on Google, Amazon, Microsoft, or Meta to practice high-frequency interview patterns with live LeetCode links.</p>
-              <p>2. <strong>Contest Calendar:</strong> Never miss a CodeChef, AtCoder, or company placement contest with 1-click subscription.</p>
-              <p>3. <strong>Leaderboard:</strong> Connect platforms and compete with campus peers on verified trust scores.</p>
+              <p>1. <strong>Skill-to-Challenge Matching:</strong> Match with live industry problem statements based on your verified skills and claimed technologies.</p>
+              <p>2. <strong>Skill Gap Analysis:</strong> Identify missing skills and follow the 4-step learning path to qualify.</p>
+              <p>3. <strong>Company Evaluations:</strong> Get evaluated on Technical, Problem Solving, Code Quality, Innovation, and Communication to unlock PPOs!</p>
             </div>
             <Button onClick={() => setShowTourModal(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2">
-              Got it, let's practice!
+              Got it, let's explore!
             </Button>
           </div>
         </div>

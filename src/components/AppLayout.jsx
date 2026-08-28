@@ -192,13 +192,20 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                 {/* PROFILE TRACKER */}
                 <div className="space-y-1">
                   <div className="px-3 text-[10px] font-bold text-white/30 tracking-[0.16em] uppercase font-mono">
-                    PROFILE TRACKER
+                    PROFILE & PIPELINE
                   </div>
                   <SidebarItem
                     icon={<Globe size={16} />}
-                    label="Portfolio"
+                    label="Portfolio & Skills"
                     active={isNavActive('portfolio')}
                     onClick={() => handleNavClick('portfolio')}
+                  />
+                  <SidebarItem
+                    icon={<Award size={16} />}
+                    label="My Applications"
+                    active={isNavActive('applications')}
+                    onClick={() => handleNavClick('applications')}
+                    badge={stats?.applications?.length > 0 ? `${stats.applications.length}` : null}
                   />
                 </div>
 
@@ -332,6 +339,13 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
                     onClick={() => handleNavClick(null, '/challenges')}
                   />
                   <SidebarItem
+                    icon={<Award size={16} />}
+                    label="Applicant Review & Evaluation"
+                    active={isNavActive('applicants')}
+                    onClick={() => handleNavClick('applicants')}
+                    badge="Live"
+                  />
+                  <SidebarItem
                     icon={<Trophy size={16} />}
                     label="Campus Leaderboard"
                     active={isNavActive('leaderboard')}
@@ -348,7 +362,7 @@ const AppLayout = ({ children, activeTab, onTabChange, stats }) => {
               <>
                 <SidebarItem
                   icon={<GraduationCap size={16} />}
-                  label="Campus Overview"
+                  label="Campus Skill Gap Matrix"
                   active={isNavActive('campus-overview')}
                   onClick={() => handleNavClick('campus-overview')}
                 />

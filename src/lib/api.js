@@ -18,6 +18,13 @@ export const authApi = {
   me: () => api.get('/auth/me').then((r) => r.data),
 };
 
+export const profileApi = {
+  getStudentProfile: () => api.get('/profile/student').then((r) => r.data),
+  updateStudentProfile: (data) => api.put('/profile/student', data).then((r) => r.data),
+  getCompanyProfile: () => api.get('/profile/company').then((r) => r.data),
+  updateCompanyProfile: (data) => api.put('/profile/company', data).then((r) => r.data),
+};
+
 export const dashboardApi = {
   stats: () => api.get('/dashboard/stats').then((r) => r.data),
   updateProgress: (data) => api.post('/dashboard/progress', data).then((r) => r.data),
@@ -34,10 +41,28 @@ export const assessmentApi = {
 };
 
 export const challengeApi = {
-  list: () => api.get('/challenges').then((r) => r.data),
+  list: (params = {}) => api.get('/challenges', { params }).then((r) => r.data),
+  getRecommended: () => api.get('/challenges/recommended').then((r) => r.data),
+  getDetails: (id) => api.get(`/challenges/${id}`).then((r) => r.data),
   create: (data) => api.post('/challenges', data).then((r) => r.data),
+  apply: (id, notes) => api.post(`/challenges/${id}/apply`, { notes }).then((r) => r.data),
+  submitSolution: (id, data) => api.post(`/challenges/${id}/submit`, data).then((r) => r.data),
   submit: (data) => api.post('/challenges/submit', data).then((r) => r.data),
   leaderboard: (id) => api.get(`/challenges/${id}/leaderboard`).then((r) => r.data),
+  getApplicants: (id, params = {}) => api.get(`/challenges/${id}/applicants`, { params }).then((r) => r.data),
+  updateStatus: (appId, status, notes) => api.post(`/applications/${appId}/status`, { status, notes }).then((r) => r.data),
+  evaluate: (appId, data) => api.post(`/applications/${appId}/evaluate`, data).then((r) => r.data),
+  myApplications: () => api.get('/applications/my').then((r) => r.data),
+};
+
+export const analyticsApi = {
+  college: () => api.get('/analytics/college').then((r) => r.data),
+};
+
+export const adminApi = {
+  getVerifications: () => api.get('/admin/verifications').then((r) => r.data),
+  verifyCompany: (userId, status) => api.post('/admin/verify-company', { user_id: userId, status }).then((r) => r.data),
+  verifyChallenge: (challId, status) => api.post('/admin/verify-challenge', { challenge_id: challId, status }).then((r) => r.data),
 };
 
 export const copilotApi = {
