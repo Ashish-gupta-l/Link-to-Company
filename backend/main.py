@@ -1154,6 +1154,8 @@ class CreateSupportTicketRequest(BaseModel):
     subject: str
     message: str
     attachment_url: Optional[str] = ""
+    name: Optional[str] = ""
+    email: Optional[str] = ""
 
     class Config:
         extra = "ignore"
@@ -1880,12 +1882,17 @@ def get_contest_events(
 
 # ----------------- Support & Feedback Tickets (Codolio Match) -----------------
 @app.post("/api/support/tickets")
-def create_support_ticket(req: CreateSupportTicketRequest, user: dict = Depends(get_current_user)):
+def create_support_ticket(req: CreateSupportTicketRequest, user: Optional[dict] = Depends(get_optional_user)):
     if not req.subject.strip() or not req.message.strip():
         raise HTTPException(status_code=400, detail="Please provide a subject and message for your support request.")
     
     ticket_id = f"TICKET-LTC-{random.randint(1000, 9999)}"
     now = datetime.now(timezone.utc).isoformat()
+
+    user_id = user["id"] if user else f"guest-{random.randint(100, 999)}"
+    user_name = req.name.strip() if req.name and req.name.strip() else (user["name"] if user else "Visitor / Student")
+    user_email = req.email.strip() if req.email and req.email.strip() else (user["email"] if user else "anonymous@linktocompany.in")
+    user_role = user.get("role", "Student") if user else "Visitor"
     
     conn = get_db()
     cursor = conn.cursor()
@@ -1894,24 +1901,80 @@ def create_support_ticket(req: CreateSupportTicketRequest, user: dict = Depends(
         id, user_id, user_name, user_email, category, priority, subject, message, attachment_url, status, admin_response, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'In Review', '', ?, ?)
     """, (
-        ticket_id, user["id"], user["name"], user["email"],
+        ticket_id, user_id, user_name, user_email,
         req.category or "General Query", req.priority or "Medium",
         req.subject.strip(), req.message.strip(),
         req.attachment_url or "", now, now
     ))
     conn.commit()
     conn.close()
+
+    # Dispatch Feedback / Support Notification Email to Admin
+    admin_recipient = "ashish.business.p@gmail.com"
+    email_subject = f"[LinktoCompany Feedback - {req.category}] {req.subject.strip()} ({req.priority})"
+    safe_name = html_lib.escape(user_name)
+    safe_email = html_lib.escape(user_email)
+    safe_subject = html_lib.escape(req.subject.strip())
+    safe_msg = html_lib.escape(req.message.strip()).replace("\n", "<br/>")
+    safe_attachment = html_lib.escape(req.attachment_url.strip()) if req.attachment_url else ""
+
+    email_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="margin: 0; padding: 0; background-color: #050508; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 25px auto; background: #0b0e17; color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+        
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 20px;">
+          <div style="margin-bottom: 10px;">
+            <span style="background: #06b6d4; color: #000; font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: monospace;">{ticket_id}</span>
+            <span style="background: rgba(255,255,255,0.1); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: monospace; margin-left: 6px;">{req.category}</span>
+            <span style="background: rgba(244,63,94,0.2); color: #fb7185; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: monospace; margin-left: 6px;">Priority: {req.priority}</span>
+          </div>
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">{safe_subject}</h2>
+        </div>
+
+        <div style="background: #050508; padding: 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 20px;">
+          <p style="color: #94a3b8; font-size: 11px; margin: 0 0 10px 0; text-transform: uppercase; font-family: monospace; letter-spacing: 1px;">Sender Details</p>
+          <p style="margin: 0 0 6px 0; font-size: 14px; color: #e2e8f0;"><strong>Name:</strong> {safe_name}</p>
+          <p style="margin: 0 0 6px 0; font-size: 14px; color: #e2e8f0;"><strong>Email:</strong> <a href="mailto:{safe_email}" style="color: #38bdf8;">{safe_email}</a></p>
+          <p style="margin: 0; font-size: 14px; color: #e2e8f0;"><strong>Role:</strong> {user_role}</p>
+        </div>
+
+        <div style="background: #050508; padding: 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 20px;">
+          <p style="color: #94a3b8; font-size: 11px; margin: 0 0 10px 0; text-transform: uppercase; font-family: monospace; letter-spacing: 1px;">Feedback / Issue Description</p>
+          <div style="font-size: 14px; color: #f1f5f9; line-height: 1.6;">
+            {safe_msg}
+          </div>
+          {f'<p style="margin-top: 15px; font-size: 13px; color: #94a3b8;"><strong>Attachment / Link:</strong> <a href="{safe_attachment}" style="color: #38bdf8;" target="_blank">{safe_attachment}</a></p>' if safe_attachment else ''}
+        </div>
+
+        <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; color: #64748b; font-size: 11px; font-family: monospace;">
+          LinktoCompany Platform · Automated Support & Feedback Notification
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    try:
+        sent, mail_msg = send_email(admin_recipient, email_subject, email_html)
+        print(f"[Support] Email dispatched to {admin_recipient}: {sent} ({mail_msg})")
+    except Exception as em_err:
+        print(f"[Support] Failed to send email to {admin_recipient}: {em_err}")
     
     return {
         "success": True,
         "ticket_id": ticket_id,
-        "message": f"Support ticket #{ticket_id} created successfully! Our engineering team will review it shortly."
+        "message": f"Support ticket #{ticket_id} submitted! Feedback has been forwarded to the engineering team."
     }
 
 @app.get("/api/support/tickets")
-def get_support_tickets(user: dict = Depends(get_current_user)):
+def get_support_tickets(user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db()
     cursor = conn.cursor()
+    if not user:
+        conn.close()
+        return {"tickets": []}
     if user.get("role") == "Admin":
         cursor.execute("SELECT * FROM support_tickets ORDER BY created_at DESC")
     else:

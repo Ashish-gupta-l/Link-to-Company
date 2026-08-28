@@ -408,6 +408,8 @@ const Dashboard = () => {
   const [supportTicketsLoading, setSupportTicketsLoading] = useState(false);
   const [supportCategory, setSupportCategory] = useState('Bug Report');
   const [supportPriority, setSupportPriority] = useState('Medium');
+  const [supportName, setSupportName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
   const [supportSubject, setSupportSubject] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [supportAttachment, setSupportAttachment] = useState('');
@@ -431,7 +433,7 @@ const Dashboard = () => {
   const handleCreateSupportTicket = async (e) => {
     if (e) e.preventDefault();
     if (!supportSubject.trim() || !supportMessage.trim()) {
-      toast({ title: 'Please enter a subject and message.', variant: 'destructive' });
+      toast({ title: 'Please enter a subject and detailed description.', variant: 'destructive' });
       return;
     }
     setSupportSubmitting(true);
@@ -441,11 +443,13 @@ const Dashboard = () => {
         priority: supportPriority,
         subject: supportSubject.trim(),
         message: supportMessage.trim(),
-        attachment_url: supportAttachment.trim()
+        attachment_url: supportAttachment.trim(),
+        name: supportName.trim() || user?.name || 'Visitor / Student',
+        email: supportEmail.trim() || user?.email || 'ashish.business.p@gmail.com'
       });
       toast({
-        title: 'Ticket Submitted! 🚀',
-        description: res.message || 'Support ticket created successfully.'
+        title: 'Feedback / Ticket Submitted! 🚀',
+        description: res.message || 'Support ticket created and email dispatched to engineering.'
       });
       setSubmittedTicketId(res.ticket_id);
       setSupportSubject('');
@@ -3049,6 +3053,29 @@ const Dashboard = () => {
                     <form onSubmit={handleCreateSupportTicket} className="space-y-4 text-xs">
                       <div className="grid sm:grid-cols-2 gap-3">
                         <div>
+                          <Label className="text-white/70">Your Name</Label>
+                          <Input
+                            placeholder={user?.name || "e.g. Ashish Gupta"}
+                            value={supportName}
+                            onChange={(e) => setSupportName(e.target.value)}
+                            className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-white/70">Your Contact Email</Label>
+                          <Input
+                            type="email"
+                            placeholder={user?.email || "e.g. student@gmail.com"}
+                            value={supportEmail}
+                            onChange={(e) => setSupportEmail(e.target.value)}
+                            className="mt-1 bg-[#07080d] border-white/10 text-white text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div>
                           <Label className="text-white/70">Category</Label>
                           <select
                             value={supportCategory}
@@ -3081,7 +3108,7 @@ const Dashboard = () => {
                       </div>
 
                       <div>
-                        <Label className="text-white/70">Subject / Title</Label>
+                        <Label className="text-white/70">Subject / Title *</Label>
                         <Input
                           placeholder="e.g. My LeetCode rating did not update on the campus leaderboard"
                           value={supportSubject}
@@ -3092,7 +3119,7 @@ const Dashboard = () => {
                       </div>
 
                       <div>
-                        <Label className="text-white/70">Detailed Description / Steps to Reproduce</Label>
+                        <Label className="text-white/70">Detailed Description / Steps to Reproduce *</Label>
                         <textarea
                           rows={5}
                           placeholder="Please provide details about what happened, error messages, or ideas for improvements..."
@@ -3113,14 +3140,18 @@ const Dashboard = () => {
                         />
                       </div>
 
-                      <div className="pt-2 flex justify-end">
+                      <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/5">
+                        <div className="text-[11px] text-white/50 font-mono">
+                          📧 Dispatches instantly to <span className="text-cyan-400">ashish.business.p@gmail.com</span>
+                        </div>
                         <Button
                           type="submit"
                           disabled={supportSubmitting}
-                          className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs px-6 py-2"
+                          onClick={handleCreateSupportTicket}
+                          className="w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs px-6 py-2 cursor-pointer shadow-lg shadow-cyan-500/20"
                         >
                           {supportSubmitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Send size={14} className="mr-1.5" />}
-                          Submit Ticket
+                          Submit Support Ticket
                         </Button>
                       </div>
                     </form>
