@@ -1021,22 +1021,28 @@ class UpdateStudentProfileRequest(BaseModel):
     branch: Optional[str] = "Computer Science"
     year: Optional[str] = "3rd Year"
     college: Optional[str] = "SLRTCE, Mumbai"
-    cgpa: Optional[float] = 8.5
-    technical_skills: List[str] = []
-    soft_skills: List[str] = []
-    preferred_domains: List[str] = []
+    cgpa: Optional[Any] = 8.5
+    technical_skills: Optional[List[Any]] = []
+    soft_skills: Optional[List[Any]] = []
+    preferred_domains: Optional[List[Any]] = []
     career_interests: Optional[str] = ""
-    projects: Optional[List[Dict[str, Any]]] = []
-    certifications: Optional[List[Dict[str, Any]]] = []
+    projects: Optional[List[Any]] = []
+    certifications: Optional[List[Any]] = []
     github_url: Optional[str] = ""
     portfolio_url: Optional[str] = ""
     resume_url: Optional[str] = ""
+
+    class Config:
+        extra = "ignore"
 
 class UpdateCompanyProfileRequest(BaseModel):
     company_name: str
     industry: Optional[str] = "Technology"
     website: Optional[str] = ""
     description: Optional[str] = ""
+
+    class Config:
+        extra = "ignore"
 
 class VerifyCompanyRequest(BaseModel):
     user_id: str
@@ -1216,6 +1222,16 @@ def update_student_profile(req: UpdateStudentProfileRequest, user: dict = Depend
     cursor = conn.cursor()
     now = datetime.now(timezone.utc).isoformat()
 
+    tech_skills = req.technical_skills if isinstance(req.technical_skills, list) else []
+    soft_skills = req.soft_skills if isinstance(req.soft_skills, list) else []
+    pref_domains = req.preferred_domains if isinstance(req.preferred_domains, list) else []
+    projects = req.projects if isinstance(req.projects, list) else []
+    certs = req.certifications if isinstance(req.certifications, list) else []
+    try:
+        cgpa_val = float(req.cgpa) if req.cgpa is not None and str(req.cgpa).strip() != "" else 8.5
+    except (ValueError, TypeError):
+        cgpa_val = 8.5
+
     cursor.execute("""
     INSERT INTO student_profiles (
         user_id, branch, year, college, cgpa, technical_skills, soft_skills,
@@ -1238,10 +1254,11 @@ def update_student_profile(req: UpdateStudentProfileRequest, user: dict = Depend
         resume_url = excluded.resume_url,
         updated_at = excluded.updated_at
     """, (
-        user["id"], req.branch, req.year, req.college, req.cgpa,
-        json.dumps(req.technical_skills), json.dumps(req.soft_skills),
-        json.dumps(req.preferred_domains), req.career_interests or "",
-        json.dumps(req.projects or []), json.dumps(req.certifications or []),
+        user["id"], req.branch or "Computer Science", req.year or "3rd Year",
+        req.college or "SLRTCE, Mumbai", cgpa_val,
+        json.dumps(tech_skills), json.dumps(soft_skills),
+        json.dumps(pref_domains), req.career_interests or "",
+        json.dumps(projects), json.dumps(certs),
         req.github_url or "", req.portfolio_url or "", req.resume_url or "", now
     ))
     conn.commit()

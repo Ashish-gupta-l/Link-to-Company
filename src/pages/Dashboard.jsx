@@ -414,7 +414,23 @@ const Dashboard = () => {
   const handleSaveStudentProfile = async () => {
     setProfileSaving(true);
     try {
-      await profileApi.updateStudentProfile(studentProfile);
+      const payload = {
+        branch: studentProfile.branch || 'Computer Science',
+        year: studentProfile.year || '3rd Year',
+        college: studentProfile.college || 'SLRTCE, Mumbai',
+        cgpa: parseFloat(studentProfile.cgpa) || 8.5,
+        technical_skills: Array.isArray(studentProfile.technical_skills) ? studentProfile.technical_skills : [],
+        soft_skills: Array.isArray(studentProfile.soft_skills) ? studentProfile.soft_skills : ['Problem Solving'],
+        preferred_domains: Array.isArray(studentProfile.preferred_domains) ? studentProfile.preferred_domains : ['Artificial Intelligence'],
+        career_interests: studentProfile.career_interests || '',
+        github_url: studentProfile.github_url || '',
+        portfolio_url: studentProfile.portfolio_url || '',
+        resume_url: studentProfile.resume_url || '',
+        projects: Array.isArray(studentProfile.projects) ? studentProfile.projects : [],
+        certifications: Array.isArray(studentProfile.certifications) ? studentProfile.certifications : []
+      };
+
+      await profileApi.updateStudentProfile(payload);
       toast({
         title: 'Profile Updated! 🚀',
         description: 'Your technical skills have been saved. Challenge match scores have been recalculated.'
