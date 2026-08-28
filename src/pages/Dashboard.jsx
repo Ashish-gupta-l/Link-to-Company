@@ -445,7 +445,7 @@ const Dashboard = () => {
         message: supportMessage.trim(),
         attachment_url: supportAttachment.trim(),
         name: supportName.trim() || user?.name || 'Visitor / Student',
-        email: supportEmail.trim() || user?.email || 'ashish.business.p@gmail.com'
+        email: supportEmail.trim() || user?.email || 'visitor@linktocompany.in'
       });
       toast({
         title: 'Feedback / Ticket Submitted! 🚀',
@@ -3141,8 +3141,9 @@ const Dashboard = () => {
                       </div>
 
                       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/5">
-                        <div className="text-[11px] text-white/50 font-mono">
-                          📧 Dispatches instantly to <span className="text-cyan-400">ashish.business.p@gmail.com</span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-white/50 font-mono">
+                          <ShieldCheck size={13} className="text-cyan-400" />
+                          <span>Direct 24/7 Engineering Support & Triage</span>
                         </div>
                         <Button
                           type="submit"
