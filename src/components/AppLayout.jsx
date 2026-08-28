@@ -5,7 +5,7 @@ import {
   Calendar, Trophy, HelpCircle, MessageSquare, User, LogOut,
   PanelLeft, Flame, Bell, Sparkles, X, ChevronRight, BookOpen,
   ShieldCheck, Zap, Star, Users, PlusCircle, CheckCircle2, Building2,
-  GraduationCap, UserCheck
+  GraduationCap, UserCheck, Award
 } from 'lucide-react';
 import { getSession, clearSession } from '../lib/api';
 
