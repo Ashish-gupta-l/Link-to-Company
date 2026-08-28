@@ -386,7 +386,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [user?.id]);
 
   // Skill Chip Add & Remove
   const handleAddSkill = (e) => {

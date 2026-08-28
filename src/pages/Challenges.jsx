@@ -121,7 +121,7 @@ const Challenges = () => {
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [user?.id]);
 
   // Check URL query for direct challenge open
   useEffect(() => {

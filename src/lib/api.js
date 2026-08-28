@@ -71,14 +71,22 @@ export const copilotApi = {
 };
 
 export const saveSession = (token, user) => {
-  localStorage.setItem('ltc_token', token);
-  localStorage.setItem('ltc_user', JSON.stringify(user));
+  if (token) localStorage.setItem('ltc_token', token);
+  if (user) localStorage.setItem('ltc_user', JSON.stringify(user));
 };
 
 export const getSession = () => {
-  const token = localStorage.getItem('ltc_token');
-  const userStr = localStorage.getItem('ltc_user');
-  return { token, user: userStr ? JSON.parse(userStr) : null };
+  try {
+    const token = localStorage.getItem('ltc_token');
+    const userStr = localStorage.getItem('ltc_user');
+    if (!userStr || userStr === 'undefined' || userStr === 'null') {
+      return { token: token || null, user: null };
+    }
+    const user = JSON.parse(userStr);
+    return { token: token || null, user: user && typeof user === 'object' ? user : null };
+  } catch (e) {
+    return { token: null, user: null };
+  }
 };
 
 export const clearSession = () => {
