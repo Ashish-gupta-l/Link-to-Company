@@ -15,6 +15,8 @@ export const authApi = {
   sendOtp: (email, name) => api.post('/auth/send-otp', { email, name }).then((r) => r.data),
   register: (data) => api.post('/auth/register', data).then((r) => r.data),
   login: (data) => api.post('/auth/login', data).then((r) => r.data),
+  forgotPasswordSendOtp: (email) => api.post('/auth/forgot-password/send-otp', { email }).then((r) => r.data),
+  forgotPasswordReset: (data) => api.post('/auth/forgot-password/reset', data).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
 };
 

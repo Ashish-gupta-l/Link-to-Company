@@ -1022,6 +1022,14 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class ForgotPasswordSendOtpRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
 class UpdateProgressRequest(BaseModel):
     goal_track: str
     completed_topics: List[str]
@@ -1280,6 +1288,101 @@ def login(req: LoginRequest):
     return {
         "token": token,
         "user": {"id": row["id"], "name": row["name"], "email": row["email"], "role": row["role"], "verification_status": row["verification_status"] or "Verified"}
+    }
+
+@app.post("/api/auth/forgot-password/send-otp")
+def forgot_password_send_otp(req: ForgotPasswordSendOtpRequest):
+    email = validate_real_email(req.email)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM users WHERE email = ?", (email,))
+    user_row = cursor.fetchone()
+    if not user_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="No registered account found with this email address. Please register.")
+
+    otp = f"{random.randint(100000, 999999)}"
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=10)
+
+    cursor.execute("""
+    INSERT INTO email_otps (email, otp, expires_at, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET otp = excluded.otp, expires_at = excluded.expires_at, created_at = excluded.created_at
+    """, (email, otp, expires.isoformat(), now.isoformat()))
+    conn.commit()
+    conn.close()
+
+    subject = f"Your LinktoCompany Password Reset Code: {otp}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="margin: 0; padding: 0; background-color: #050508; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <div style="max-width: 540px; margin: 30px auto; background: #0b0d13; color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="display: inline-block; width: 44px; height: 44px; background: #2563eb; color: #ffffff; font-weight: 900; font-size: 22px; line-height: 44px; border-radius: 8px; margin-bottom: 8px;">L</div>
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Password Reset Request</h2>
+          <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">Account Recovery</p>
+        </div>
+        <div style="background: #050508; padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+          <p style="color: #e2e8f0; font-size: 14px; margin: 0 0 10px 0;">Hello <strong>{html_lib.escape(user_row['name'])}</strong>,</p>
+          <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 15px 0;">You requested to reset your password. Use the 6-digit recovery code below:</p>
+          <div style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #38bdf8; padding: 14px 0; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; display: block; font-family: monospace;">
+            {otp}
+          </div>
+          <p style="color: #64748b; font-size: 12px; margin: 15px 0 0 0;">Valid for <strong>10 minutes</strong>. If you did not request this, please ignore this email.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    sent, msg = send_email(email, subject, html)
+    return {
+        "success": True,
+        "message": f"Password reset OTP sent to {email}",
+        "email_delivered": sent,
+        "delivery_status": msg
+    }
+
+@app.post("/api/auth/forgot-password/reset")
+def forgot_password_reset(req: ResetPasswordRequest):
+    email = validate_real_email(req.email)
+    if not req.otp or len(req.otp.strip()) != 6:
+        raise HTTPException(status_code=400, detail="Please enter a valid 6-digit recovery OTP code.")
+    if not req.new_password or len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters long.")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT otp, expires_at FROM email_otps WHERE email = ?", (email,))
+    otp_row = cursor.fetchone()
+    if not otp_row or otp_row["otp"] != req.otp.strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid recovery OTP code. Please check your email inbox.")
+
+    expires_at = datetime.fromisoformat(otp_row["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a fresh code.")
+
+    cursor.execute("SELECT id, name, email, role, verification_status FROM users WHERE email = ?", (email,))
+    user_row = cursor.fetchone()
+    if not user_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User account not found.")
+
+    new_pw_hash = hash_pw(req.new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE email = ?", (new_pw_hash, email))
+    cursor.execute("DELETE FROM email_otps WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()
+
+    token = create_token(user_row["id"], user_row["role"])
+    return {
+        "success": True,
+        "token": token,
+        "user": dict(user_row),
+        "message": "Password successfully reset! You are now logged in."
     }
 
 @app.get("/api/auth/me")
